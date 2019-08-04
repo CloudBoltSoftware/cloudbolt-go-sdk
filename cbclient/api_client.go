@@ -89,20 +89,15 @@ type CloudBoltOrder struct {
 		DeployItems []struct {
 			Blueprint               string `json:"blueprint"`
 			BlueprintItemsArguments struct {
-				BuildItemBuildVM struct {
+				BuildItemBuildServer struct {
 					Attributes struct {
 						Hostname string `json:"hostname"`
 						Quantity int    `json:"quantity"`
 					} `json:"attributes"`
-					OsBuild    string `json:"os-build"`
-					Parameters struct {
-						CPUCnt          string `json:"cpu-cnt"`
-						MemSize         string `json:"mem-size"`
-						PlacementTag    string `json:"placement-tag"`
-						VmwareDatastore string `json:"vmware-datastore"`
-						VmwareDiskType  string `json:"vmware-disk-type"`
-					} `json:"parameters"`
-				} `json:"build-item-Build_VM"`
+					OsBuild     string                 `json:"os-build,omitempty"`
+					Environment string                 `json:"environment,omitempty"`
+					Parameters  map[string]interface{} `json:"parameters"`
+				} `json:"build-item-Server"`
 			} `json:"blueprint-items-arguments"`
 			ResourceName       string `json:"resource-name"`
 			ResourceParameters struct {
@@ -498,8 +493,18 @@ func (cbClient CloudBoltClient) DeployBlueprint(grpPath string, bpPath string, b
 					"attributes": map[string]interface{}{
 						"quantity": 1,
 					},
-					"parameters": v["bp-item-paramas"],
+					"parameters": v["bp-item-paramas"].(map[string]interface{}),
 				}},
+		}
+
+		env, ok := v["environment"]
+		if ok {
+			bpItem["blueprint-items-arguments"].(map[string]interface{})[v["bp-item-name"].(string)].(map[string]interface{})["environment"] = env
+		}
+
+		osb, ok := v["os-build"]
+		if ok {
+			bpItem["blueprint-items-arguments"].(map[string]interface{})[v["bp-item-name"].(string)].(map[string]interface{})["os-build"] = osb
 		}
 
 		deployItems = append(deployItems, bpItem)
@@ -513,15 +518,14 @@ func (cbClient CloudBoltClient) DeployBlueprint(grpPath string, bpPath string, b
 		"submit-now": "true",
 	}
 
-	reqJson, err := json.Marshal(reqData)
-
+	reqJSON, err := json.Marshal(reqData)
 	if err != nil {
 		log.Fatalln(err)
 		return order, err
 	}
 
 	apiurl := fmt.Sprintf("%s/api/v2/orders/", cbClient.BaseURL)
-	req, err := http.NewRequest("POST", apiurl, bytes.NewBuffer(reqJson))
+	req, err := http.NewRequest("POST", apiurl, bytes.NewBuffer(reqJSON))
 	if err != nil {
 		log.Fatalln(err)
 		return order, err
