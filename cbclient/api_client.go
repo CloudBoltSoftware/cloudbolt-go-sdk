@@ -653,6 +653,8 @@ func (cbClient CloudBoltClient) DecomOrder(grpPath string, envPath string, serve
 	decomItem["environment"] = envPath
 	decomItem["servers"] = servers
 
+	decomItems = append(decomItems, decomItem)
+
 	reqData := map[string]interface{}{
 		"group": grpPath,
 		"items": map[string]interface{}{
@@ -667,10 +669,11 @@ func (cbClient CloudBoltClient) DecomOrder(grpPath string, envPath string, serve
 		return CloudBoltOrder{}, err
 	}
 
-	apiurl := fmt.Sprintf("%s/orders/", cbClient.BaseURL)
+	apiurl := fmt.Sprintf("%s/api/v2/orders/", cbClient.BaseURL)
 	req, err := http.NewRequest("POST", apiurl, bytes.NewBuffer(reqJson))
 	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", cbClient.Token))
 	req.Header.Add("Content-Type", "application/json")
+	req.Header.Add("Accept", "application/json")
 
 	resp, err := cbClient.HTTPClient.Do(req)
 	if err != nil {
