@@ -391,7 +391,7 @@ func New(protocol string, host string, port string, username string, password st
 func (cbClient CloudBoltClient) GetCloudBoltObject(objPath string, objName string) (CloudBoltObject, error) {
 	apiurl := cbClient.BaseURL
 	apiurl.Path = fmt.Sprintf("/api/v2/%s/", objPath)
-	apiurl.RawQuery = fmt.Sprintf("filter=name:%s", objName)
+	apiurl.RawQuery = fmt.Sprintf("filter=name:%s", url.QueryEscape(objName))
 
 	// log.Printf("[!!] apiurl in GetCloudBoltObject: %+v (%+v)", apiurl.String(), apiurl)
 
