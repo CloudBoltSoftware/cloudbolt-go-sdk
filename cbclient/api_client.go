@@ -369,7 +369,7 @@ func New(protocol string, host string, port string, username string, password st
 	apiurl := cbClient.BaseURL
 	apiurl.Path = "/api/v2/api-token-auth/"
 
-	// log.Printf("[!!] apiurl in New: %+v (%+v)", apiurl.String(), apiurl)
+	log.Printf("[!!] apiurl in New: %+v (%+v)", apiurl.String(), apiurl)
 
 	resp, err := cbClient.HTTPClient.Post(apiurl.String(), "application/json", bytes.NewBuffer(reqJson))
 	if err != nil {
@@ -383,7 +383,7 @@ func New(protocol string, host string, port string, username string, password st
 	json.NewDecoder(resp.Body).Decode(&userAuthData)
 	cbClient.Token = userAuthData.Token
 
-	// log.Printf("[!!] cbClient: %+v", cbClient)
+	log.Printf("[!!] cbClient: %+v", cbClient)
 
 	return cbClient, nil
 }
@@ -393,7 +393,7 @@ func (cbClient CloudBoltClient) GetCloudBoltObject(objPath string, objName strin
 	apiurl.Path = fmt.Sprintf("/api/v2/%s/", objPath)
 	apiurl.RawQuery = fmt.Sprintf("filter=name:%s", url.QueryEscape(objName))
 
-	// log.Printf("[!!] apiurl in GetCloudBoltObject: %+v (%+v)", apiurl.String(), apiurl)
+	log.Printf("[!!] apiurl in GetCloudBoltObject: %+v (%+v)", apiurl.String(), apiurl)
 
 	req, err := http.NewRequest("GET", apiurl.String(), nil)
 	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", cbClient.Token))
@@ -405,13 +405,15 @@ func (cbClient CloudBoltClient) GetCloudBoltObject(objPath string, objName strin
 
 		return CloudBoltObject{}, err
 	}
-	// log.Printf("[!!] HTTP response: %+v", resp)
+	log.Printf("[!!] HTTP response: %+v", resp)
 
 	var res CloudBoltResult
 	json.NewDecoder(resp.Body).Decode(&res)
 
-	// log.Printf("[!!] CloudBoltResult response %+v", res) // HERE IS WHERE THE PANIC IS!!!
+	log.Printf("[!!] CloudBoltResult response %+v", res) // HERE IS WHERE THE PANIC IS!!!
 	if len(res.Embedded) == 0 {
+		log.Fatalln("Could not find %s with name %s. Does the user have permission to view this?", objPath, objName)
+
 		return CloudBoltObject{}, err
 	}
 	return res.Embedded[0], nil
@@ -425,24 +427,24 @@ func (cbClient CloudBoltClient) verifyGroup(groupPath string, parentPath string)
 	apiurl := cbClient.BaseURL
 	apiurl.Path = groupPath
 
-	// log.Printf("[!!] apiurl in verifyGroup: %+v (%+v)", apiurl.String(), apiurl)
+	log.Printf("[!!] apiurl in verifyGroup: %+v (%+v)", apiurl.String(), apiurl)
 
 	req, err := http.NewRequest("GET", apiurl.String(), nil)
 	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", cbClient.Token))
 	req.Header.Add("Content-Type", "application/json")
 
-	// log.Printf("[!!] req: %+v", req)
+	log.Printf("[!!] req: %+v", req)
 
 	resp, err := cbClient.HTTPClient.Do(req)
-	// log.Printf("[!!] resp: %+v", resp)
+	log.Printf("[!!] resp: %+v", resp)
 	if err != nil {
-		// log.Printf("[!!] request err was not nil: %+v", err)
+		log.Printf("[!!] request err was not nil: %+v", err)
 		log.Fatalln(err)
 
 		return false, err
 	}
 	if resp.StatusCode >= 300 {
-		// log.Printf("[!!] request returned a bad status: %+v", resp.Status)
+		log.Printf("[!!] request returned a bad status: %+v", resp.Status)
 		log.Fatalln(resp.Status)
 
 		return false, errors.New(resp.Status)
@@ -450,29 +452,29 @@ func (cbClient CloudBoltClient) verifyGroup(groupPath string, parentPath string)
 
 	json.NewDecoder(resp.Body).Decode(&group)
 
-	// log.Printf("[!!] group : %+v", group)
+	log.Printf("[!!] group : %+v", group)
 
 	nextIndex := strings.LastIndex(parentPath, "/")
 
-	// log.Printf("[!!] nextIndex : %+v", nextIndex)
+	log.Printf("[!!] nextIndex : %+v", nextIndex)
 
-	// log.Printf("[!!] parentPath: %+v", parentPath)
-	// log.Printf("[!!] strings.LastIndex(parentPath, '/')+1: %+v", strings.LastIndex(parentPath, "/")+1)
+	log.Printf("[!!] parentPath: %+v", parentPath)
+	log.Printf("[!!] strings.LastIndex(parentPath, '/')+1: %+v", strings.LastIndex(parentPath, "/")+1)
 	if nextIndex >= 0 {
 		parent = parentPath[strings.LastIndex(parentPath, "/")+1:]
 		nextParentPath = parentPath[:strings.LastIndex(parentPath, "/")]
-		// log.Printf("[!!] parent: %+v, %+v", parent, nextParentPath)
+		log.Printf("[!!] parent: %+v, %+v", parent, nextParentPath)
 	} else {
 		parent = parentPath
-		// log.Printf("[!!] parent: %+v", parent)
+		log.Printf("[!!] parent: %+v", parent)
 	}
 
-	// log.Printf("[!!] group.Links.Parent.Title: %+v", group.Links.Parent.Title)
+	log.Printf("[!!] group.Links.Parent.Title: %+v", group.Links.Parent.Title)
 	if group.Links.Parent.Title != parent {
 		return false, nil
 	}
 
-	// log.Printf("[!!] nextParentPath: %+v", nextParentPath)
+	log.Printf("[!!] nextParentPath: %+v", nextParentPath)
 	if nextParentPath != "" {
 		return cbClient.verifyGroup(group.Links.Parent.Href, nextParentPath)
 	}
@@ -489,8 +491,8 @@ func (cbClient CloudBoltClient) GetGroup(groupPath string) (CloudBoltObject, err
 	groupPath = strings.Trim(groupPath, "/")
 	nextIndex := strings.LastIndex(groupPath, "/")
 
-	// log.Printf("[!!] groupPath: %+v", groupPath)
-	// log.Printf("[!!] strings.LastIndex(groupPath, '/')+1: %+v", strings.LastIndex(groupPath, "/")+1)
+	log.Printf("[!!] groupPath: %+v", groupPath)
+	log.Printf("[!!] strings.LastIndex(groupPath, '/')+1: %+v", strings.LastIndex(groupPath, "/")+1)
 	if nextIndex >= 0 {
 		group = groupPath[strings.LastIndex(groupPath, "/")+1:]
 		parentPath = groupPath[:strings.LastIndex(groupPath, "/")]
@@ -502,7 +504,7 @@ func (cbClient CloudBoltClient) GetGroup(groupPath string) (CloudBoltObject, err
 	apiurl.Path = "/api/v2/groups/"
 	apiurl.RawQuery = fmt.Sprintf("filter=name:%s", url.QueryEscape(group))
 
-	// log.Printf("[!!] apiurl in GetGroup: %+v (%+v)", apiurl.String(), apiurl)
+	log.Printf("[!!] apiurl in GetGroup: %+v (%+v)", apiurl.String(), apiurl)
 
 	req, err := http.NewRequest("GET", apiurl.String(), nil)
 	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", cbClient.Token))
@@ -574,12 +576,12 @@ func (cbClient CloudBoltClient) DeployBlueprint(grpPath string, bpPath string, r
 		return order, err
 	}
 
-	// log.Printf("[!!] JSON payload in POST request to Deploy Blueprint:\n%s", string(reqJSON))
+	log.Printf("[!!] JSON payload in POST request to Deploy Blueprint:\n%s", string(reqJSON))
 
 	apiurl := cbClient.BaseURL
 	apiurl.Path = "/api/v2/orders/"
 
-	// log.Printf("[!!] apiurl in DeployBlueprint: %+v (%+v)", apiurl.String(), apiurl)
+	log.Printf("[!!] apiurl in DeployBlueprint: %+v (%+v)", apiurl.String(), apiurl)
 
 	reqBody := bytes.NewBuffer(reqJSON)
 
@@ -625,7 +627,7 @@ func (cbClient CloudBoltClient) GetOrder(orderId string) (CloudBoltOrder, error)
 	apiurl := cbClient.BaseURL
 	apiurl.Path = fmt.Sprintf("/api/v2/orders/%s", orderId)
 
-	// log.Printf("[!!] apiurl in GetOrder: %+v (%+v)", apiurl.String(), apiurl)
+	log.Printf("[!!] apiurl in GetOrder: %+v (%+v)", apiurl.String(), apiurl)
 
 	req, err := http.NewRequest("GET", apiurl.String(), nil)
 	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", cbClient.Token))
@@ -649,7 +651,7 @@ func (cbClient CloudBoltClient) GetJob(jobPath string) (CloudBoltJob, error) {
 	apiurl := cbClient.BaseURL
 	apiurl.Path = jobPath
 
-	// log.Printf("[!!] GetJob: %+v (%+v)", apiurl.String(), apiurl)
+	log.Printf("[!!] GetJob: %+v (%+v)", apiurl.String(), apiurl)
 
 	req, err := http.NewRequest("GET", apiurl.String(), nil)
 	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", cbClient.Token))
@@ -673,7 +675,7 @@ func (cbClient CloudBoltClient) GetResource(resourcePath string) (CloudBoltResou
 	apiurl := cbClient.BaseURL
 	apiurl.Path = resourcePath
 
-	// log.Printf("[!!] apiurl in GetResource: %+v (%+v)", apiurl.String(), apiurl)
+	log.Printf("[!!] apiurl in GetResource: %+v (%+v)", apiurl.String(), apiurl)
 
 	req, err := http.NewRequest("GET", apiurl.String(), nil)
 	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", cbClient.Token))
@@ -697,7 +699,7 @@ func (cbClient CloudBoltClient) GetServer(serverPath string) (CloudBoltServer, e
 	apiurl := cbClient.BaseURL
 	apiurl.Path = serverPath
 
-	// log.Printf("[!!] apiurl in GetServer: %+v (%+v)", apiurl.String(), apiurl)
+	log.Printf("[!!] apiurl in GetServer: %+v (%+v)", apiurl.String(), apiurl)
 
 	req, err := http.NewRequest("GET", apiurl.String(), nil)
 	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", cbClient.Token))
@@ -720,7 +722,7 @@ func (cbClient CloudBoltClient) SubmitAction(actionPath string) (CloudBoltAction
 	apiurl := cbClient.BaseURL
 	apiurl.Path = actionPath
 
-	// log.Printf("[!!] apiurl in SubmitAction: %+v (%+v)", apiurl.String(), apiurl)
+	log.Printf("[!!] apiurl in SubmitAction: %+v (%+v)", apiurl.String(), apiurl)
 
 	req, err := http.NewRequest("POST", apiurl.String(), nil)
 	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", cbClient.Token))
@@ -765,7 +767,7 @@ func (cbClient CloudBoltClient) DecomOrder(grpPath string, envPath string, serve
 	apiurl := cbClient.BaseURL
 	apiurl.Path = "/api/v2/orders/"
 
-	// log.Printf("[!!] apiurl in DecomOrder: %+v (%+v)", apiurl.String(), apiurl)
+	log.Printf("[!!] apiurl in DecomOrder: %+v (%+v)", apiurl.String(), apiurl)
 
 	req, err := http.NewRequest("POST", apiurl.String(), bytes.NewBuffer(reqJson))
 	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", cbClient.Token))
