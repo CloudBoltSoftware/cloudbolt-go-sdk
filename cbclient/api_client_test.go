@@ -39,6 +39,10 @@ func TestHttpTestExample(t *testing.T) {
 }
 */
 
+func createClientInstance(server httptest.Server) {
+
+}
+
 func TestNew(t *testing.T) {
 	RegisterTestingT(t)
 
@@ -60,4 +64,31 @@ func TestNew(t *testing.T) {
 	Expect(client).NotTo(BeNil())
 	Expect(client.Token).NotTo(BeNil())
 	Expect(client.Token).To(Equal("this is a testing token"))
+}
+
+func TestGetCloudBoltObject(t *testing.T) {
+	RegisterTestingT(t)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		Expect(r.URL.Path).To(Equal("/api/v2/thing1/"))
+		Expect(r.URL.RawQuery).To(Equal("filter=name:thing2"))
+		Expect(r.Header["Authorization"]).To(Equal("Bearer Whatever the heck we want"))
+		w.WriteHeader(http.StatusOK)
+		w.Header().Add("Content-Type", "application/json")
+		w.Write([]byte(`{"token": "this is a testing token"}`))
+	}))
+
+	uri, err := url.Parse(server.URL)
+	Expect(err).NotTo(HaveOccurred())
+	Expect(uri).NotTo(BeNil())
+
+	client := CloudBoltClient {
+		BaseURL:    *uri,
+		HTTPClient: &http.Client{},
+		Token:      "Whatever the heck we want",
+	}
+
+	obj, err := client.GetCloudBoltObject("thing1", "thing2")
+	Expect(err).To(HaveOccurred())
+	Expect(obj).NotTo(BeNil())
 }
