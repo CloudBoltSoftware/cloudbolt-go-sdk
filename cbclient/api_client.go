@@ -13,6 +13,8 @@ import (
 	"time"
 )
 
+// TODO: Improve the quality of this SDK code.
+
 type CloudBoltObject struct {
 	Links struct {
 		Self struct {

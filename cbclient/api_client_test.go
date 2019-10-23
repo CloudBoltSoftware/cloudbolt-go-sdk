@@ -39,10 +39,6 @@ func TestHttpTestExample(t *testing.T) {
 }
 */
 
-func createClientInstance(server httptest.Server) {
-
-}
-
 func TestNew(t *testing.T) {
 	RegisterTestingT(t)
 
@@ -69,13 +65,13 @@ func TestNew(t *testing.T) {
 func TestGetCloudBoltObject(t *testing.T) {
 	RegisterTestingT(t)
 
+	var receivedRequest *http.Request
+
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		Expect(r.URL.Path).To(Equal("/api/v2/thing1/"))
-		Expect(r.URL.RawQuery).To(Equal("filter=name:thing2"))
-		Expect(r.Header["Authorization"]).To(Equal("Bearer Whatever the heck we want"))
+		receivedRequest = r
 		w.WriteHeader(http.StatusOK)
 		w.Header().Add("Content-Type", "application/json")
-		w.Write([]byte(`{"token": "this is a testing token"}`))
+		w.Write([]byte(BodyForGetObject))
 	}))
 
 	uri, err := url.Parse(server.URL)
@@ -89,6 +85,66 @@ func TestGetCloudBoltObject(t *testing.T) {
 	}
 
 	obj, err := client.GetCloudBoltObject("thing1", "thing2")
-	Expect(err).To(HaveOccurred())
+	Expect(err).NotTo(HaveOccurred())
 	Expect(obj).NotTo(BeNil())
+
+	// TODO make some assertions about the body of `obj`
+
+	Expect(receivedRequest.URL.Path).To(Equal("/api/v2/thing1/"))
+	Expect(receivedRequest.URL.RawQuery).To(Equal("filter=name:thing2"))
+	Expect(receivedRequest.Header["Authorization"]).To(Equal([]string{"Bearer Whatever the heck we want"}))
+}
+
+func TestVerifyGroup(t *testing.T) {
+	RegisterTestingT(t)
+
+	Expect(nil).NotTo(BeNil())
+}
+
+func TestGetGroup(t *testing.T) {
+	RegisterTestingT(t)
+
+	Expect(nil).NotTo(BeNil())
+}
+
+func TestDeployBlueprint(t *testing.T) {
+	RegisterTestingT(t)
+
+	Expect(nil).NotTo(BeNil())
+}
+
+func TestGetOrder(t *testing.T) {
+	RegisterTestingT(t)
+
+	Expect(nil).NotTo(BeNil())
+}
+
+func TestGetJob(t *testing.T) {
+	RegisterTestingT(t)
+
+	Expect(nil).NotTo(BeNil())
+}
+
+func TestGetResource(t *testing.T) {
+	RegisterTestingT(t)
+
+	Expect(nil).NotTo(BeNil())
+}
+
+func TestGetServer(t *testing.T) {
+	RegisterTestingT(t)
+
+	Expect(nil).NotTo(BeNil())
+}
+
+func TestSubmitAction(t *testing.T) {
+	RegisterTestingT(t)
+
+	Expect(nil).NotTo(BeNil())
+}
+
+func TestDecomOrder(t *testing.T) {
+	RegisterTestingT(t)
+
+	Expect(nil).NotTo(BeNil())
 }
