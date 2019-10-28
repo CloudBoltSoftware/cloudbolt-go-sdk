@@ -65,10 +65,10 @@ func TestNew(t *testing.T) {
 func TestGetCloudBoltObject(t *testing.T) {
 	RegisterTestingT(t)
 
-	var receivedRequest *http.Request
+	var requests []*http.Request
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		receivedRequest = r
+		requests = append(requests, r)
 		w.WriteHeader(http.StatusOK)
 		w.Header().Add("Content-Type", "application/json")
 		w.Write([]byte(BodyForGetObject))
@@ -81,70 +81,119 @@ func TestGetCloudBoltObject(t *testing.T) {
 	client := CloudBoltClient {
 		BaseURL:    *uri,
 		HTTPClient: &http.Client{},
-		Token:      "Whatever the heck we want",
+		Token:      "TestGetCloudBoltObject Token",
 	}
 
-	obj, err := client.GetCloudBoltObject("thing1", "thing2")
+	obj, err := client.GetCloudBoltObject("things", "Thing 2")
 	Expect(err).NotTo(HaveOccurred())
 	Expect(obj).NotTo(BeNil())
 
-	// TODO make some assertions about the body of `obj`
+	Expect(requests[0].URL.Path).To(Equal("/api/v2/things/"))
+	Expect(requests[0].URL.RawQuery).To(Equal("filter=name:Thing+2"))
+	Expect(requests[0].Header["Authorization"]).To(Equal([]string{"Bearer TestGetCloudBoltObject Token"}))
 
-	Expect(receivedRequest.URL.Path).To(Equal("/api/v2/thing1/"))
-	Expect(receivedRequest.URL.RawQuery).To(Equal("filter=name:thing2"))
-	Expect(receivedRequest.Header["Authorization"]).To(Equal([]string{"Bearer Whatever the heck we want"}))
+	Expect(obj.Links.Self.Href).To(Equal("/api/v2/things/XYZ-abcdefgh/"))
+	Expect(obj.Links.Self.Title).To(Equal("Thing 2"))
+	Expect(obj.Name).To(Equal("Thing 2"))
+	Expect(obj.ID).To(Equal("3"))
+
 }
 
 func TestVerifyGroup(t *testing.T) {
 	RegisterTestingT(t)
 
+	// TODO: This is here to force the test to fail
 	Expect(nil).NotTo(BeNil())
 }
 
 func TestGetGroup(t *testing.T) {
 	RegisterTestingT(t)
 
-	Expect(nil).NotTo(BeNil())
+	var requests []*http.Request
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Header().Add("Content-Type", "application/json")
+		w.Write([]byte(BodyForGetGroup(len(requests))))
+
+		requests = append(requests, r)
+	}))
+
+	uri, err := url.Parse(server.URL)
+	Expect(err).NotTo(HaveOccurred())
+	Expect(uri).NotTo(BeNil())
+
+	client := CloudBoltClient {
+		BaseURL: *uri,
+		HTTPClient: &http.Client{},
+		Token: "TestGetGroup Token",
+	}
+
+	group, err := client.GetGroup("group name")
+	Expect(err).NotTo(HaveOccurred())
+	Expect(group).NotTo(BeNil())
+
+	Expect(requests[0].URL.Path).To(Equal("/api/v2/groups/"))
+	Expect(requests[0].URL.RawQuery).To(Equal("filter=name:group+name"))
+	Expect(requests[0].Header["Authorization"]).To(Equal([]string{"Bearer TestGetGroup Token"}))
+
+	Expect(requests[1].URL.Path).To(Equal("/api/v2/groups/GRP-th3gr0up/"))
+	Expect(requests[1].URL.RawQuery).To(Equal(""))
+	Expect(requests[1].Header["Authorization"]).To(Equal([]string{"Bearer TestGetGroup Token"}))
+
+	Expect(len(requests)).To(Equal(2))
+
+	Expect(group.Links.Self.Href).To(Equal("/api/v2/groups/GRP-th3gr0up"))
+	Expect(group.Links.Self.Title).To(Equal("the group"))
+	Expect(group.Name).To(Equal("the group"))
+	Expect(group.ID).To(Equal(6))
 }
 
 func TestDeployBlueprint(t *testing.T) {
 	RegisterTestingT(t)
 
+	// TODO: This is here to force the test to fail
 	Expect(nil).NotTo(BeNil())
 }
 
 func TestGetOrder(t *testing.T) {
 	RegisterTestingT(t)
 
+	// TODO: This is here to force the test to fail
 	Expect(nil).NotTo(BeNil())
 }
 
 func TestGetJob(t *testing.T) {
 	RegisterTestingT(t)
 
+	// TODO: This is here to force the test to fail
 	Expect(nil).NotTo(BeNil())
 }
 
 func TestGetResource(t *testing.T) {
 	RegisterTestingT(t)
 
+	// TODO: This is here to force the test to fail
 	Expect(nil).NotTo(BeNil())
 }
 
 func TestGetServer(t *testing.T) {
 	RegisterTestingT(t)
 
+	// TODO: This is here to force the test to fail
 	Expect(nil).NotTo(BeNil())
 }
 
 func TestSubmitAction(t *testing.T) {
 	RegisterTestingT(t)
 
+	// TODO: This is here to force the test to fail
 	Expect(nil).NotTo(BeNil())
 }
 
 func TestDecomOrder(t *testing.T) {
 	RegisterTestingT(t)
 
+	// TODO: This is here to force the test to fail
 	Expect(nil).NotTo(BeNil())
 }

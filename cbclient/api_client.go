@@ -371,7 +371,7 @@ func New(protocol string, host string, port string, username string, password st
 	apiurl := cbClient.BaseURL
 	apiurl.Path = "/api/v2/api-token-auth/"
 
-	log.Printf("[!!] apiurl in New: %+v (%+v)", apiurl.String(), apiurl)
+	// log.Printf("[!!] apiurl in New: %+v (%+v)", apiurl.String(), apiurl)
 
 	resp, err := cbClient.HTTPClient.Post(apiurl.String(), "application/json", bytes.NewBuffer(reqJson))
 	if err != nil {
@@ -385,7 +385,7 @@ func New(protocol string, host string, port string, username string, password st
 	json.NewDecoder(resp.Body).Decode(&userAuthData)
 	cbClient.Token = userAuthData.Token
 
-	log.Printf("[!!] cbClient: %+v", cbClient)
+	// log.Printf("[!!] cbClient: %+v", cbClient)
 
 	return cbClient, nil
 }
@@ -395,7 +395,7 @@ func (cbClient CloudBoltClient) GetCloudBoltObject(objPath string, objName strin
 	apiurl.Path = fmt.Sprintf("/api/v2/%s/", objPath)
 	apiurl.RawQuery = fmt.Sprintf("filter=name:%s", url.QueryEscape(objName))
 
-	log.Printf("[!!] apiurl in GetCloudBoltObject: %+v (%+v)", apiurl.String(), apiurl)
+	// log.Printf("[!!] apiurl in GetCloudBoltObject: %+v (%+v)", apiurl.String(), apiurl)
 
 	req, err := http.NewRequest("GET", apiurl.String(), nil)
 	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", cbClient.Token))
@@ -407,7 +407,7 @@ func (cbClient CloudBoltClient) GetCloudBoltObject(objPath string, objName strin
 
 		return CloudBoltObject{}, err // Consider return nil, err
 	}
-	log.Printf("[!!] HTTP response: %+v", resp)
+	// log.Printf("[!!] HTTP response: %+v", resp)
 
 	// TODO: HTTP Response handling
 
@@ -416,7 +416,7 @@ func (cbClient CloudBoltClient) GetCloudBoltObject(objPath string, objName strin
 
 	// TODO: Sanity check the decoded object
 
-	log.Printf("[!!] CloudBoltResult response %+v", res) // HERE IS WHERE THE PANIC IS!!!
+	// log.Printf("[!!] CloudBoltResult response %+v", res) // HERE IS WHERE THE PANIC IS!!!
 	if len(res.Embedded) == 0 {
 		return CloudBoltObject{}, errors.New(fmt.Sprintf("Could not find %s with name %s. Does the user have permission to view this?", objPath, objName))
 	}
@@ -522,6 +522,8 @@ func (cbClient CloudBoltClient) GetGroup(groupPath string) (CloudBoltObject, err
 	}
 
 	json.NewDecoder(resp.Body).Decode(&res)
+
+	// log.Printf("[!!] JSON decoded response: %+v", res)
 
 	for _, v := range res.Embedded {
 		groupFound, err = cbClient.verifyGroup(v.Links.Self.Href, parentPath)
