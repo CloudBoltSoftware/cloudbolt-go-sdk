@@ -15,6 +15,7 @@ import (
 
 // TODO: Improve the quality of this SDK code.
 
+// CloudBoltObject ...
 type CloudBoltObject struct {
 	Links struct {
 		Self struct {
@@ -26,6 +27,7 @@ type CloudBoltObject struct {
 	ID   string `json:"id"`
 }
 
+// CloudBoltClient ...
 type CloudBoltClient struct {
 	// TODO: Make members not public
 	BaseURL    url.URL
@@ -35,6 +37,7 @@ type CloudBoltClient struct {
 	password   string
 }
 
+// CloudBoltResult ...
 type CloudBoltResult struct {
 	Links struct {
 		Self struct {
@@ -47,6 +50,7 @@ type CloudBoltResult struct {
 	Embedded []CloudBoltObject `json:"_embedded"` // TODO: Maybe call this Items?
 }
 
+// CloudBoltActionResult ...
 type CloudBoltActionResult struct {
 	RunActionJob struct {
 		Self struct {
@@ -56,11 +60,13 @@ type CloudBoltActionResult struct {
 	} `json:"run-action-job"`
 }
 
+// CloudBoltHALItem ...
 type CloudBoltHALItem struct {
 	Href  string `json:"href"`
 	Title string `json:"title"`
 }
 
+// CloudBoltOrder ...
 type CloudBoltOrder struct {
 	Links struct {
 		Self struct {
@@ -112,6 +118,7 @@ type CloudBoltOrder struct {
 	} `json:"items"`
 }
 
+// CloudBoltJob ...
 type CloudBoltJob struct {
 	Links struct {
 		Self struct {
@@ -159,6 +166,7 @@ type CloudBoltJob struct {
 	Output    string `json:"output"`
 }
 
+// CloudBoltGroup ...
 type CloudBoltGroup struct {
 	Links struct {
 		Self struct {
@@ -186,6 +194,7 @@ type CloudBoltGroup struct {
 	AutoApproval bool   `json:"auto-approval"`
 }
 
+// CloudBoltResource ...
 type CloudBoltResource struct {
 	Links struct {
 		Self struct {
@@ -238,6 +247,7 @@ type CloudBoltResource struct {
 	InstallDate string `json:"install-date"`
 }
 
+// CloudBoltServer ...
 type CloudBoltServer struct {
 	Links struct {
 		Self struct {
@@ -342,6 +352,7 @@ type CloudBoltServer struct {
 	} `json:"tech-specific-details"`
 }
 
+// New ...
 // TODO: In each other method try to do the action; if we get an auth error,
 // try to get a new token and try the action again.
 func New(protocol string, host string, port string, username string, password string) (CloudBoltClient, error) {
@@ -372,7 +383,8 @@ func New(protocol string, host string, port string, username string, password st
 	return cbClient, nil
 }
 
-func (cbClient *CloudBoltClient) performRequestWithAuthRetry(req: *http.Request) (*http.Response, error) {
+// performRequestWithAuthRetry ...
+func (cbClient *CloudBoltClient) performRequestWithAuthRetry(req *http.Request) (*http.Response, error) {
 	resp, err := cbClient.HTTPClient.Do(req)
 	if err != nil {
 		return nil, err
@@ -380,7 +392,7 @@ func (cbClient *CloudBoltClient) performRequestWithAuthRetry(req: *http.Request)
 
 	if resp.StatusCode == 403 { // use http.StatusAuthNotPermitted or whatever...
 		// TODO: Turn this block into it's own function
-		reqJson, err := json.Marshal(struct {
+		reqJSON, err := json.Marshal(struct {
 			Username string `json:"username"`
 			Password string `json:"password"`
 		}{
@@ -395,7 +407,7 @@ func (cbClient *CloudBoltClient) performRequestWithAuthRetry(req: *http.Request)
 		// TODO: Conditional logging
 		// log.Printf("[!!] apiurl in New: %+v (%+v)", apiurl.String(), apiurl)
 
-		resp, err := cbClient.HTTPClient.Post(apiurl.String(), "application/json", bytes.NewBuffer(reqJson))
+		resp, err := cbClient.HTTPClient.Post(apiurl.String(), "application/json", bytes.NewBuffer(reqJSON))
 		if err != nil {
 			log.Fatalf("Failed to create the API client. %s", err)
 		}
@@ -413,6 +425,7 @@ func (cbClient *CloudBoltClient) performRequestWithAuthRetry(req: *http.Request)
 	return resp, err
 }
 
+// GetCloudBoltObject ...
 // TODO: cbClient should by convention be `c`
 // TODO: make this receiver a pointer
 //       cbClient CloudBoltClient -> cbClient *CloudBoltClient
@@ -448,9 +461,9 @@ func (cbClient CloudBoltClient) GetCloudBoltObject(objPath string, objName strin
 	// TODO: Handle all json.*.Decode() errors
 	// TODO: Read resp.Body into a byte buffer
 	// err := json.Unmarshal(bodyByteBuffer, &res)
-	err := json.NewDecoder(resp.Body).Decode(&res)
+	err = json.NewDecoder(resp.Body).Decode(&res)
 	if err != nil {
-		CloudBoltObject{}, err
+		return CloudBoltObject{}, err
 	}
 	// TODO: Maybe defer resp.Body.Close()
 
@@ -459,11 +472,12 @@ func (cbClient CloudBoltClient) GetCloudBoltObject(objPath string, objName strin
 	// TODO: Conditional logging
 	// log.Printf("[!!] CloudBoltResult response %+v", res) // HERE IS WHERE THE PANIC IS!!!
 	if len(res.Embedded) == 0 {
-		return CloudBoltObject{}, errors.New(fmt.Sprintf("Could not find %s with name %s. Does the user have permission to view this?", objPath, objName))
+		return CloudBoltObject{}, fmt.Errorf("Could not find %s with name %s. Does the user have permission to view this?", objPath, objName)
 	}
 	return res.Embedded[0], nil
 }
 
+// verifyGroup ...
 // TODO: make this receiver a pointer
 //       cbClient CloudBoltClient -> cbClient *CloudBoltClient
 func (cbClient CloudBoltClient) verifyGroup(groupPath string, parentPath string) (bool, error) {
@@ -546,6 +560,7 @@ func (cbClient CloudBoltClient) verifyGroup(groupPath string, parentPath string)
 	return true, nil
 }
 
+// GetGroup ...
 // TODO: make this receiver a pointer
 //       cbClient CloudBoltClient -> cbClient *CloudBoltClient
 func (cbClient CloudBoltClient) GetGroup(groupPath string) (CloudBoltObject, error) {
@@ -604,6 +619,7 @@ func (cbClient CloudBoltClient) GetGroup(groupPath string) (CloudBoltObject, err
 	return CloudBoltObject{}, fmt.Errorf("Group (%s): Not Found", groupPath)
 }
 
+// DeployBlueprint ...
 // TODO: make this receiver a pointer
 //       cbClient CloudBoltClient -> cbClient *CloudBoltClient
 func (cbClient CloudBoltClient) DeployBlueprint(grpPath string, bpPath string, resourceName string, bpItems []map[string]interface{}) (CloudBoltOrder, error) {
@@ -687,12 +703,12 @@ func (cbClient CloudBoltClient) DeployBlueprint(grpPath string, bpPath string, r
 		buf := new(bytes.Buffer)
 		buf.ReadFrom(resp.Body)
 		respBody := buf.String()
-		return CloudBoltOrder{}, fmt.Errorf("recieved a server error: %s", respBody)
+		return CloudBoltOrder{}, fmt.Errorf("received a server error: %s", respBody)
 	case resp.StatusCode >= 400:
 		buf := new(bytes.Buffer)
 		buf.ReadFrom(resp.Body)
 		respBody := buf.String()
-		return CloudBoltOrder{}, fmt.Errorf("recieved an HTTP client error: %s", respBody)
+		return CloudBoltOrder{}, fmt.Errorf("received an HTTP client error: %s", respBody)
 	default:
 		json.NewDecoder(resp.Body).Decode(&order)
 
@@ -700,15 +716,16 @@ func (cbClient CloudBoltClient) DeployBlueprint(grpPath string, bpPath string, r
 	}
 }
 
+// GetOrder ...
 // TODO: make this receiver a pointer
 //       cbClient CloudBoltClient -> cbClient *CloudBoltClient
-func (cbClient CloudBoltClient) GetOrder(orderId string) (CloudBoltOrder, error) {
+func (cbClient CloudBoltClient) GetOrder(orderID string) (CloudBoltOrder, error) {
 	var order CloudBoltOrder
 
 	apiurl := cbClient.BaseURL
 	// TODO: This is a magic string
 	// API_ORDERS_FMT_STR
-	apiurl.Path = fmt.Sprintf("/api/v2/orders/%s", orderId)
+	apiurl.Path = fmt.Sprintf("/api/v2/orders/%s", orderID)
 
 	// TODO: Conditional logging
 	// log.Printf("[!!] apiurl in GetOrder: %+v (%+v)", apiurl.String(), apiurl)
@@ -729,6 +746,7 @@ func (cbClient CloudBoltClient) GetOrder(orderId string) (CloudBoltOrder, error)
 	return order, nil
 }
 
+// GetJob ...
 // TODO: make this receiver a pointer
 //       cbClient CloudBoltClient -> cbClient *CloudBoltClient
 func (cbClient CloudBoltClient) GetJob(jobPath string) (CloudBoltJob, error) {
@@ -756,6 +774,7 @@ func (cbClient CloudBoltClient) GetJob(jobPath string) (CloudBoltJob, error) {
 	return job, nil
 }
 
+// GetResource ...
 // TODO: make this receiver a pointer
 //       cbClient CloudBoltClient -> cbClient *CloudBoltClient
 func (cbClient CloudBoltClient) GetResource(resourcePath string) (CloudBoltResource, error) {
@@ -783,6 +802,7 @@ func (cbClient CloudBoltClient) GetResource(resourcePath string) (CloudBoltResou
 	return res, nil
 }
 
+// GetServer ...
 // TODO: make this receiver a pointer
 //       cbClient CloudBoltClient -> cbClient *CloudBoltClient
 func (cbClient CloudBoltClient) GetServer(serverPath string) (CloudBoltServer, error) {
@@ -809,6 +829,7 @@ func (cbClient CloudBoltClient) GetServer(serverPath string) (CloudBoltServer, e
 	return svr, nil
 }
 
+// SubmitAction ...
 // TODO: make this receiver a pointer
 //       cbClient CloudBoltClient -> cbClient *CloudBoltClient
 func (cbClient CloudBoltClient) SubmitAction(actionPath string) (CloudBoltActionResult, error) {
@@ -835,6 +856,7 @@ func (cbClient CloudBoltClient) SubmitAction(actionPath string) (CloudBoltAction
 	return actionRes, nil
 }
 
+// DecomOrder ...
 // TODO: make this receiver a pointer
 //       cbClient CloudBoltClient -> cbClient *CloudBoltClient
 func (cbClient CloudBoltClient) DecomOrder(grpPath string, envPath string, servers []string) (CloudBoltOrder, error) {
@@ -856,7 +878,7 @@ func (cbClient CloudBoltClient) DecomOrder(grpPath string, envPath string, serve
 		"submit-now": "true",
 	}
 
-	reqJson, err := json.Marshal(reqData)
+	reqJSON, err := json.Marshal(reqData)
 	if err != nil {
 		log.Fatalln(err)
 		return CloudBoltOrder{}, err
@@ -869,7 +891,7 @@ func (cbClient CloudBoltClient) DecomOrder(grpPath string, envPath string, serve
 	// TODO: Conditional logging
 	// log.Printf("[!!] apiurl in DecomOrder: %+v (%+v)", apiurl.String(), apiurl)
 
-	req, err := http.NewRequest("POST", apiurl.String(), bytes.NewBuffer(reqJson))
+	req, err := http.NewRequest("POST", apiurl.String(), bytes.NewBuffer(reqJSON))
 	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", cbClient.Token))
 	req.Header.Add("Content-Type", "application/json")
 	req.Header.Add("Accept", "application/json")
