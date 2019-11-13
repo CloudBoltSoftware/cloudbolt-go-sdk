@@ -1,11 +1,11 @@
 package cbclient
 
 import (
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"testing"
-	"net"
 
 	. "github.com/onsi/gomega"
 )
@@ -71,14 +71,14 @@ func TestGetCloudBoltObject(t *testing.T) {
 		requests = append(requests, r)
 		w.WriteHeader(http.StatusOK)
 		w.Header().Add("Content-Type", "application/json")
-		w.Write([]byte(BodyForGetObject))
+		w.Write([]byte(bodyForGetObject))
 	}))
 
 	uri, err := url.Parse(server.URL)
 	Expect(err).NotTo(HaveOccurred())
 	Expect(uri).NotTo(BeNil())
 
-	client := CloudBoltClient {
+	client := CloudBoltClient{
 		BaseURL:    *uri,
 		HTTPClient: &http.Client{},
 		Token:      "TestGetCloudBoltObject Token",
@@ -114,7 +114,7 @@ func TestGetGroup(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		w.Header().Add("Content-Type", "application/json")
-		w.Write([]byte(BodyForGetGroup(len(requests))))
+		w.Write([]byte(bodyForGetGroup(len(requests))))
 
 		requests = append(requests, r)
 	}))
@@ -123,10 +123,10 @@ func TestGetGroup(t *testing.T) {
 	Expect(err).NotTo(HaveOccurred())
 	Expect(uri).NotTo(BeNil())
 
-	client := CloudBoltClient {
-		BaseURL: *uri,
+	client := CloudBoltClient{
+		BaseURL:    *uri,
 		HTTPClient: &http.Client{},
-		Token: "TestGetGroup Token",
+		Token:      "TestGetGroup Token",
 	}
 
 	group, err := client.GetGroup("group name")
@@ -154,10 +154,10 @@ func TestDeployBlueprint(t *testing.T) {
 
 	var requests []*http.Request
 
-	server := httptest.NewServer( http.HandlerFunc( func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		w.Header().Add("Content-Type", "application/json")
-		w.Write([]byte(BodyForDeployBlueprint(len(requests))))
+		w.Write([]byte(bodyForDeployBlueprint(len(requests))))
 
 		requests = append(requests, r)
 	}))
@@ -166,10 +166,10 @@ func TestDeployBlueprint(t *testing.T) {
 	Expect(err).NotTo(HaveOccurred())
 	Expect(uri).NotTo(BeNil())
 
-	client := CloudBoltClient {
-		BaseURL: *uri,
+	client := CloudBoltClient{
+		BaseURL:    *uri,
 		HTTPClient: &http.Client{},
-		Token: "TestGetGroup Token",
+		Token:      "TestGetGroup Token",
 	}
 
 	bpItems := bpOrderItems()
@@ -179,62 +179,62 @@ func TestDeployBlueprint(t *testing.T) {
 	Expect(order).NotTo(BeNil())
 
 	/*
-{
-	Links:{
-		Self:{
-			Href:/api/v2/orders/42/ 
-			Title:Order id 42
-		} 
-		Group:{
-			Href:/api/v2/groups/GRP-ncrggwao/ 
-			Title:TerraformOrderGroup01
-		} 
-		Owner:{
-			Href:/api/v2/users/2/
-			Title:Elijah Voigt
-		} 
-		ApprovedBy:{
-			Href:/api/v2/users/2/
-			Title:Elijah Voigt
-		}
-		Actions:{
-			Href:
-			Title:
-		}
-		Jobs:[
-			{
-			Href:/api/v2/jobs/1285/ 
-			Title:Job id 1285
-			}
-		]
-	}
-	Name: 
-	ID:42 
-	Status:ACTIVE
-	Rate:0.00/month
-	CreateDate:2019-10-28T18:39:32.099576
-	ApproveDate:2019-10-28T18:39:32.420531
-	Items:{
-		DeployItems:[
-			{
-			Blueprint:/api/v2/blueprints/BP-4gph95o9/
-			BlueprintItemsArguments:{
-				BuildItemBuildServer:{
-					Attributes:{
-						Hostname:
-						Quantity:0
-					}
-					OsBuild:
-					Environment:
-					Parameters:map[]
+		{
+			Links:{
+				Self:{
+					Href:/api/v2/orders/42/
+					Title:Order id 42
 				}
+				Group:{
+					Href:/api/v2/groups/GRP-ncrggwao/
+					Title:TerraformOrderGroup01
+				}
+				Owner:{
+					Href:/api/v2/users/2/
+					Title:Some User
+				}
+				ApprovedBy:{
+					Href:/api/v2/users/2/
+					Title:Some User
+				}
+				Actions:{
+					Href:
+					Title:
+				}
+				Jobs:[
+					{
+					Href:/api/v2/jobs/1285/
+					Title:Job id 1285
+					}
+				]
 			}
-			ResourceName:resource name
-			ResourceParameters:{ }
+			Name:
+			ID:42
+			Status:ACTIVE
+			Rate:0.00/month
+			CreateDate:2019-10-28T18:39:32.099576
+			ApproveDate:2019-10-28T18:39:32.420531
+			Items:{
+				DeployItems:[
+					{
+					Blueprint:/api/v2/blueprints/BP-4gph95o9/
+					BlueprintItemsArguments:{
+						BuildItemBuildServer:{
+							Attributes:{
+								Hostname:
+								Quantity:0
+							}
+							OsBuild:
+							Environment:
+							Parameters:map[]
+						}
+					}
+					ResourceName:resource name
+					ResourceParameters:{ }
+					}
+				]
 			}
-		]
-	}
-}
+		}
 	*/
 	Expect(requests[0].URL.Path).To(Equal("/api/v2/orders/"))
 	Expect(requests[0].Header["Authorization"]).To(Equal([]string{"Bearer TestGetGroup Token"}))

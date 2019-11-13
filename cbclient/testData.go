@@ -1,6 +1,6 @@
 package cbclient
 
-const BodyForGetObject = `{
+const bodyForGetObject = `{
     "_links": {
         "self": {
             "href": "/api/v2/things/?page=1",
@@ -24,10 +24,10 @@ const BodyForGetObject = `{
 }
 `
 
-// A slice of responses for the GetGroup test.
+// bodyForGetGroup: A slice of responses for the GetGroup test.
 // This is a function because we cannot delcare const slices.
-// Since it's a function we accept an index parameter `i` for coveneince.
-func BodyForGetGroup(i int) string {
+// Since it's a function we accept an index parameter `i` for convenience.
+func bodyForGetGroup(i int) string {
 	return []string{`{
 		    "_links": {
 			"self": {
@@ -74,21 +74,23 @@ func BodyForGetGroup(i int) string {
 
 func bpOrderItems() []map[string]interface{} {
 	bpParameters := map[string]interface{}{
-		"some-param": "param value",
+		"some-param":  "param value",
 		"other-param": "foo bar baz",
 	}
 
 	bpItem := map[string]interface{}{
 		"bp-item-name":    "bp item name",
 		"bp-item-paramas": bpParameters,
-		"environment": "bp environment",
-		"osbuild": "bp osbuild",
+		"environment":     "bp environment",
+		"osbuild":         "bp osbuild",
 	}
 
-	return []map[string]interface{}{ bpItem }
+	return []map[string]interface{}{bpItem}
 }
 
-func BodyForDeployBlueprint(i int) string {
+// bodyForDeployBlueprint ...
+func bodyForDeployBlueprint(i int) string {
+	// A comment
 	return []string{`{
 	    "_links": {
 		"self": {
