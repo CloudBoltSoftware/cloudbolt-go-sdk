@@ -75,8 +75,8 @@ func TestSomeFunction(t *testing.T) {
     RegisterTestingT(t)
 
     // Spawn a testing server with a function for scripted responses
-    // Below we go into what `bodyForSomeFunction` should look like
-    server, requests := mockServer(bodyForSomeFunction)
+    // Below we go into what `responsesForSomeFunction` should look like
+    server, requests := mockServer(responsesForSomeFunction)
     Expect(server).NotTo(BeNil())
     Expect(requests).NoTo(BeNil())
 
@@ -108,7 +108,7 @@ Knowing this we need to make sure our `mockServer` returns 2 correct-looking pay
 To do this declare a function that generates responses for our `mockServer()` to serve.
 
 That function is passed as an input to `mockServer()` and is called on each HTTP request.
-e.g., `bodyForSomeFunction()` is called in our mockServer as `bodyForSomeFunction(request#)`.
+e.g., `responsesForSomeFunction()` is called in our mockServer as `responsesForSomeFunction(request#)`.
 
 Response functions are declared in `testData.go` and also tend to look the same.
 
@@ -122,12 +122,25 @@ const someOtherResponse string = `{
     "a_key": "another_value"
 }`
 
-// Write a function that accepts as input an index (i) and returns a string.
-// This is the response for that tests's i-th request.
+// Write a function that accepts as input an index (i) and returns a string (body) and int (status code).
+// This is the response for that tests's i-th request response.
+func responsesForSomeFunction(i int) (string, int) {
+    return bodyForSomeFunction(i), statusForSomeFunction(i)
+}
+
+// Bodies for the i-th request response.
 func bodyForSomeFunction(i int) string {
     return []string{
         someResponse,
         someOtherResponse,
+    }[i]
+}
+
+// Status codes for the i-th request response.
+func statusForSomeFunction(i int) int {
+    return []int{
+        401,
+        200
     }[i]
 }
 ```
