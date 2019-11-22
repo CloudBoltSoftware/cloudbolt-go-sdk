@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"net/url"
@@ -14,7 +13,7 @@ import (
 	"time"
 )
 
-const FILTER_BY_NAME string = "filter=name:%s"
+const filterByName string = "filter=name:%s"
 
 // CloudBoltObject stores the generic output of objects.
 // Most objects in CloudBolt include Links.Self.Href, Links.Self.Title, Name, and ID
@@ -325,15 +324,9 @@ func (c *CloudBoltClient) Authenticate() (int, error) {
 		return resp.StatusCode, fmt.Errorf("Received bad HTTP response %d: %s", resp.StatusCode, resp.Status)
 	}
 
-	// Read the entire response body
-	userAuthBody, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return -1, err
-	}
-
-	// Unmarshal the response body into the cloudBoltUserAuthToken struct
+	// We Decode the data because we already have an io.Reader on hand
 	var userAuthData cloudBoltUserAuthToken
-	json.Unmarshal(userAuthBody, &userAuthData)
+	json.NewDecoder(resp.Body).Decode(&userAuthData)
 
 	// Set the CloudBoltClient token as that parsed Token value
 	c.token = userAuthData.Token
@@ -439,7 +432,7 @@ func (c *CloudBoltClient) apiEndpoint(paths ...string) string {
 func (c *CloudBoltClient) GetCloudBoltObject(objPath string, objName string) (*CloudBoltObject, error) {
 	apiurl := c.baseURL
 	apiurl.Path = c.apiEndpoint(objPath)
-	apiurl.RawQuery = fmt.Sprintf(FILTER_BY_NAME, url.QueryEscape(objName))
+	apiurl.RawQuery = fmt.Sprintf(filterByName, url.QueryEscape(objName))
 
 	// log.Printf("[!!] apiurl in GetCloudBoltObject: %+v (%+v)", apiurl.String(), apiurl)
 
@@ -456,6 +449,7 @@ func (c *CloudBoltClient) GetCloudBoltObject(objPath string, objName string) (*C
 
 	// TODO: HTTP Response handling
 
+	// We Decode the data because we already have an io.Reader on hand
 	var res CloudBoltResult
 	json.NewDecoder(resp.Body).Decode(&res)
 
@@ -480,7 +474,6 @@ func (c *CloudBoltClient) GetCloudBoltObject(objPath string, objName string) (*C
 // If a group has parents, it should be of the format "root-level-parent/sub-parent/.../closest-parent"
 func (c *CloudBoltClient) verifyGroup(groupPath string, parentPath string) (bool, error) {
 	// log.Printf("Verifying group %+v with parent(s) %+v\n", groupPath, parentPath)
-	var group CloudBoltGroup
 	var parent string
 	var nextParentPath string
 
@@ -502,6 +495,8 @@ func (c *CloudBoltClient) verifyGroup(groupPath string, parentPath string) (bool
 		return false, errors.New(resp.Status)
 	}
 
+	// We Decode the data because we already have an io.Reader on hand
+	var group CloudBoltGroup
 	json.NewDecoder(resp.Body).Decode(&group)
 
 	nextIndex := strings.LastIndex(parentPath, "/")
@@ -537,7 +532,6 @@ func (c *CloudBoltClient) verifyGroup(groupPath string, parentPath string) (bool
 //
 // verifyGroup recursively verifies that this is a valid group/subgroup.
 func (c *CloudBoltClient) GetGroup(groupPath string) (*CloudBoltObject, error) {
-	var res CloudBoltResult
 	var group string
 	var parentPath string
 	var groupFound bool
@@ -558,7 +552,7 @@ func (c *CloudBoltClient) GetGroup(groupPath string) (*CloudBoltObject, error) {
 
 	apiurl := c.baseURL
 	apiurl.Path = c.apiEndpoint("groups")
-	apiurl.RawQuery = fmt.Sprintf(FILTER_BY_NAME, url.QueryEscape(group))
+	apiurl.RawQuery = fmt.Sprintf(filterByName, url.QueryEscape(group))
 
 	// log.Printf("[!!] apiurl in GetGroup: %+v (%+v)", apiurl.String(), apiurl)
 
@@ -572,6 +566,8 @@ func (c *CloudBoltClient) GetGroup(groupPath string) (*CloudBoltObject, error) {
 		return nil, err
 	}
 
+	// We Decode the data because we already have an io.Reader on hand
+	var res CloudBoltResult
 	json.NewDecoder(resp.Body).Decode(&res)
 
 	for _, v := range res.Embedded {
@@ -603,8 +599,6 @@ func (c *CloudBoltClient) GetGroup(groupPath string) (*CloudBoltObject, error) {
 //           }
 //       }
 func (c *CloudBoltClient) DeployBlueprint(grpPath string, bpPath string, resourceName string, bpItems []map[string]interface{}) (*CloudBoltOrder, error) {
-	var order CloudBoltOrder
-
 	deployItems := make([]map[string]interface{}, 0)
 
 	for _, v := range bpItems {
@@ -679,6 +673,8 @@ func (c *CloudBoltClient) DeployBlueprint(grpPath string, bpPath string, resourc
 		respBody := buf.String()
 		return nil, fmt.Errorf("received an HTTP client error: %s", respBody)
 	default:
+		// We Decode the data because we already have an io.Reader on hand
+		var order CloudBoltOrder
 		json.NewDecoder(resp.Body).Decode(&order)
 
 		return &order, nil
@@ -688,8 +684,6 @@ func (c *CloudBoltClient) DeployBlueprint(grpPath string, bpPath string, resourc
 // GetOrder fetches an Order from CloudBolt
 // - Order ID (orderID) e.g., "123"; formatted into a string like "/api/v2/orders/123"
 func (c *CloudBoltClient) GetOrder(orderID string) (*CloudBoltOrder, error) {
-	var order CloudBoltOrder
-
 	apiurl := c.baseURL
 	apiurl.Path = c.apiEndpoint("orders", orderID)
 
@@ -707,6 +701,8 @@ func (c *CloudBoltClient) GetOrder(orderID string) (*CloudBoltOrder, error) {
 		return nil, err
 	}
 
+	// We Decode the data because we already have an io.Reader on hand
+	var order CloudBoltOrder
 	json.NewDecoder(resp.Body).Decode(&order)
 
 	return &order, nil
@@ -715,8 +711,6 @@ func (c *CloudBoltClient) GetOrder(orderID string) (*CloudBoltOrder, error) {
 // GetJob fetches the Job object from CloudBolt at the given path
 // - Job Path (jobPath) e.g., "/api/v2/jobs/123/"
 func (c *CloudBoltClient) GetJob(jobPath string) (*CloudBoltJob, error) {
-	var job CloudBoltJob
-
 	apiurl := c.baseURL
 	apiurl.Path = jobPath
 
@@ -734,6 +728,8 @@ func (c *CloudBoltClient) GetJob(jobPath string) (*CloudBoltJob, error) {
 		return nil, err
 	}
 
+	// We Decode the data because we already have an io.Reader on hand
+	var job CloudBoltJob
 	json.NewDecoder(resp.Body).Decode(&job)
 
 	return &job, nil
@@ -742,8 +738,6 @@ func (c *CloudBoltClient) GetJob(jobPath string) (*CloudBoltJob, error) {
 // GetResource fetches a Resource object from CloudBolt at the given path
 // - Resource Path (resourcePath) e.g., "/api/v2/resources/service/123/"
 func (c *CloudBoltClient) GetResource(resourcePath string) (*CloudBoltResource, error) {
-	var res CloudBoltResource
-
 	apiurl := c.baseURL
 	apiurl.Path = resourcePath
 
@@ -761,6 +755,8 @@ func (c *CloudBoltClient) GetResource(resourcePath string) (*CloudBoltResource, 
 		return nil, err
 	}
 
+	// We Decode the data because we already have an io.Reader on hand
+	var res CloudBoltResource
 	json.NewDecoder(resp.Body).Decode(&res)
 
 	return &res, nil
@@ -769,8 +765,6 @@ func (c *CloudBoltClient) GetResource(resourcePath string) (*CloudBoltResource, 
 // GetServer fetches a Server object from CloudBolt at the given path
 // - Server Path (serverPath) e.g., "/api/v2/servers/123/"
 func (c *CloudBoltClient) GetServer(serverPath string) (*CloudBoltServer, error) {
-	var svr CloudBoltServer
-
 	apiurl := c.baseURL
 	apiurl.Path = serverPath
 
@@ -787,6 +781,8 @@ func (c *CloudBoltClient) GetServer(serverPath string) (*CloudBoltServer, error)
 		return nil, err
 	}
 
+	// We Decode the data because we already have an io.Reader on hand
+	var svr CloudBoltServer
 	json.NewDecoder(resp.Body).Decode(&svr)
 
 	return &svr, nil
@@ -795,8 +791,6 @@ func (c *CloudBoltClient) GetServer(serverPath string) (*CloudBoltServer, error)
 // SubmitAction runs an action on the CloudBolt server
 // - Action Path (actionPath) e.g., "/api/v2/actions/123/"
 func (c *CloudBoltClient) SubmitAction(actionPath string) (*CloudBoltActionResult, error) {
-	var actionRes CloudBoltActionResult
-
 	apiurl := c.baseURL
 	apiurl.Path = actionPath
 
@@ -813,6 +807,8 @@ func (c *CloudBoltClient) SubmitAction(actionPath string) (*CloudBoltActionResul
 		return nil, err
 	}
 
+	// We Decode the data because we already have an io.Reader on hand
+	var actionRes CloudBoltActionResult
 	json.NewDecoder(resp.Body).Decode(&actionRes)
 
 	return &actionRes, nil
@@ -828,8 +824,6 @@ func (c *CloudBoltClient) SubmitAction(actionPath string) (*CloudBoltActionResul
 //           `/api/v2/servers/891011/`,
 //       }
 func (c *CloudBoltClient) DecomOrder(grpPath string, envPath string, servers []string) (*CloudBoltOrder, error) {
-	var order CloudBoltOrder
-
 	decomItems := make([]map[string]interface{}, 0)
 
 	decomItem := make(map[string]interface{})
@@ -866,6 +860,8 @@ func (c *CloudBoltClient) DecomOrder(grpPath string, envPath string, servers []s
 		return nil, err
 	}
 
+	// We Decode the data because we already have an io.Reader on hand
+	var order CloudBoltOrder
 	json.NewDecoder(resp.Body).Decode(&order)
 
 	return &order, nil
