@@ -2,16 +2,19 @@ package cbclient
 
 import (
 	"bytes"
-	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"net/url"
+	"path"
 	"strings"
 	"time"
 )
+
+const FILTER_BY_NAME string = "filter=name:%s"
 
 // CloudBoltObject stores the generic output of objects.
 // Most objects in CloudBolt include Links.Self.Href, Links.Self.Title, Name, and ID
@@ -27,20 +30,13 @@ type CloudBoltObject struct {
 // - BaseURL follows the pattern "https://cloudbolt.myco.ext:443/".
 // - HTTPClient is a client used to make the API calls.
 // - Token is retrieved in `New` and is included in the Bearer Token of request headers.
-//
-// Note that the CloudBoltClient will change in future version of the CloudBolt SDK:
-// - All members will be private.
-// - It will have the following members:
-//   - apiVersion
-//   - username
-//   - password
-//   - token
-//   - httpClient
-// For more information about changes to the CloudBoltClient struct, see the docstring for New.
 type CloudBoltClient struct {
-	BaseURL    url.URL
-	HTTPClient *http.Client
-	Token      string
+	baseURL    url.URL
+	httpClient *http.Client
+	password   string
+	token      string
+	username   string
+	apiVersion string
 }
 
 // CloudBoltResult stores the response of paginated calls like `/api/v2/blueprints/`
@@ -241,84 +237,220 @@ type CloudBoltServer struct {
 	} `json:"tech-specific-details"`
 }
 
-// New creates a CloudBoltClient object.
-// Note that this _does_ make a call to the API to retrieve a token.
-//
-// This behavior is expected to change in future version of the SDK.
-// - New will accept as input an *http.Client, username, and password, and apiVersion.
-// - New will make no API calls and will initialize an empty `token`.
-// - Each cbClient function will make a request with the current `CloudBoltClient.token`.
-//   If that call fails, it will re-auth and try again.
-// - cbClient will get a new `Authenticate` method to force this re-auth.
-func New(protocol string, host string, port string, username string, password string) (CloudBoltClient, error) {
-	var cbClient CloudBoltClient
-	cbClient.HTTPClient = &http.Client{
-		Timeout: time.Second * 10,
-		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{
-				InsecureSkipVerify: true, // TODO make this configurable
-			},
-		},
-	}
+type cloudBoltUserAuthCreds struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
+}
 
-	cbClient.BaseURL = url.URL{
+type cloudBoltUserAuthToken struct {
+	Token string `json:"token"`
+}
+
+// New returns an initialized CloudBoltClient object.
+// Accepts as input:
+// - HTTP Protocol (protocol) e.g., "https"
+// - HTTP Host (host) e.g., "cloudbolt.intranet"
+// - HTTP Port (port) e.g., "443"
+// - apiVersion (apiVersion) e.g., "v2"
+// - Username (username) e.g., "myUserName"
+// - Password (password) e.g., "My Passphrase!"
+// - User-provided *HTTPClient (httpClient); provide `nil` to get a server with the following defaults:
+//   - Timeout set to 60 seconds
+//   Provide a custom http.Client if you require unique certificate, timeout, etc., configured.
+//
+// New does not make any API calls.
+// CloudBoltClient.Authenticate must be called to initialize CloudBoltClient.token.
+// This is done automatically when a request receives an HTTP Authorization error.
+func New(protocol string, host string, port string, apiVersion string, username string, password string, httpClient *http.Client) *CloudBoltClient {
+	baseURL := url.URL{
 		Scheme: protocol,
 		Host:   fmt.Sprintf("%s:%s", host, port),
 	}
 
-	reqJSON, err := json.Marshal(struct {
-		Username string `json:"username"`
-		Password string `json:"password"`
-	}{
-		Username: username,
-		Password: password,
-	})
-
-	if err != nil {
-		log.Fatalln(err)
-		return cbClient, err
+	var client *http.Client
+	if httpClient == nil {
+		// The given Client is `nil` so we provide a sane default
+		client = &http.Client{
+			Timeout: 60 * time.Second,
+		}
+	} else {
+		// The user provided an HTTP Client so we pass that through to the CloudBoltClient
+		client = httpClient
 	}
 
-	apiurl := cbClient.BaseURL
-	apiurl.Path = "/api/v2/api-token-auth/"
+	return &CloudBoltClient{
+		baseURL:    baseURL,
+		httpClient: client,
+		username:   username,
+		password:   password,
+		apiVersion: apiVersion,
+	}
+}
 
-	// log.Printf("[!!] apiurl in New: %+v (%+v)", apiurl.String(), apiurl)
-
-	resp, err := cbClient.HTTPClient.Post(apiurl.String(), "application/json", bytes.NewBuffer(reqJSON))
+// Authenticate forces the CloudBoltClient to re-authenticate
+// Returns an error if there is an HTTP error, or if the HTTP Status Code is >=400
+func (c *CloudBoltClient) Authenticate() (int, error) {
+	// Craft the JSON payload used to request an API token
+	userCreds := cloudBoltUserAuthCreds{
+		Username: c.username,
+		Password: c.password,
+	}
+	reqJSON, err := json.Marshal(userCreds)
 	if err != nil {
-		log.Fatalf("Failed to create the API client. %s", err)
+		return -1, err
 	}
 
-	userAuthData := struct {
-		Token string `json:"token"`
-	}{}
+	// Put the username+password into a bytes buffer for the API request
+	reqJSONBytes := bytes.NewBuffer(reqJSON)
 
-	json.NewDecoder(resp.Body).Decode(&userAuthData)
-	cbClient.Token = userAuthData.Token
+	// Craft the URL api-token request endpoint based on the API version
+	apiurl := c.baseURL
+	apiurl.Path = c.apiEndpoint("api-token-auth")
 
-	// log.Printf("[!!] cbClient: %+v", cbClient)
+	// Make the POST request to get the API token
+	req, err := http.NewRequest("POST", apiurl.String(), reqJSONBytes)
+	if err != nil {
+		return -1, err
+	}
+	req.Header.Set("Content-Type", "application/json")
 
-	return cbClient, nil
+	// Execute the HTTP request
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return -1, fmt.Errorf("Failed to create the API client. %s", err)
+	}
+
+	// We received a bad HTTP request, so forward that to the caller before trying to parse the response
+	if resp.StatusCode >= 400 {
+		return resp.StatusCode, fmt.Errorf("Received bad HTTP response %d: %s", resp.StatusCode, resp.Status)
+	}
+
+	// Read the entire response body
+	userAuthBody, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return -1, err
+	}
+
+	// Unmarshal the response body into the cloudBoltUserAuthToken struct
+	var userAuthData cloudBoltUserAuthToken
+	json.Unmarshal(userAuthBody, &userAuthData)
+
+	// Set the CloudBoltClient token as that parsed Token value
+	c.token = userAuthData.Token
+
+	// Return the HTTP status code and a nil error for success
+	return resp.StatusCode, nil
+}
+
+// makeRequest wrapps most HTTP requests by adding:
+// - Set Content Type to JSON
+// - Set Accept to JSON
+// - Calling authWrappedRequest
+func (c *CloudBoltClient) makeRequest(req *http.Request) (*http.Response, error) {
+	// Sending and Accepting JSON
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
+
+	return c.authWrappedRequest(req)
+}
+
+// makeRequest wraps the normal HTTP request by re-authenticating if we get an
+// "Unauthorized" HTTP response.
+//
+// if the first attempt at the request returns a 401 or 403 HTTP Status Code
+// it Attempts exactly one call to CloudBoltClient.Authenticate() and resets the request token.
+func (c *CloudBoltClient) authWrappedRequest(req *http.Request) (*http.Response, error) {
+	// Add the Auth token to the request
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.token))
+
+	// Attempt to make the given HTTP request
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+
+	switch resp.StatusCode {
+	// Handle common HTTP "auth" related Status Codes
+	case 401, 403:
+		// Re-authenticate with the API
+		_, err := c.Authenticate()
+		if err != nil {
+			return nil, err
+		}
+
+		// Re-add the auth token which should have updated
+		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.token))
+
+		// Make the request again
+		// We assume we have valid Auth credentials
+		resp, err := c.httpClient.Do(req)
+		if err != nil {
+			return nil, err
+		}
+
+		// Return the post-re-auth response
+		// This may still get a bad HTTP error
+		return resp, nil
+
+	// If we didn't get one of the those 40x Status Codes,
+	// then pass through the original result
+	default:
+		// Return the original response
+		return resp, nil
+	}
+}
+
+// apiEndpoint standardizes getting a CloudBolt API endpoint
+// Pass in a variadic number of entries and they are formatted like so:
+// apiEndpoint("foo", "bar", "baz") -> /api/{apiVersion}/foo/bar/baz/
+//
+// Only returns the path, not the prepending "https://host:port"
+func (c *CloudBoltClient) apiEndpoint(paths ...string) string {
+	// Create a slice ["api", "someVersion"]
+	basePathSlice := []string{
+		"api",
+		c.apiVersion,
+	}
+
+	// Concatenate basePathSlice with the user provided paths
+	fullPath := append(
+		basePathSlice,
+		paths...,
+	)
+
+	// Format the array of path entries as "api/{apiVersion}/path/to/thing"
+	// Note this does not include the root and trailing "/" which we want
+	formattedPath := path.Join(fullPath...)
+
+	// Formats the result to include the root and trailing slashes
+	// e.g., "/api/{apiVersion}/path/to/thing/"
+	return fmt.Sprintf("/%s/", formattedPath)
 }
 
 // GetCloudBoltObject fetches a given object of type "objPath" with the name "objName"
 // e.g., GetCloudBoltObject("users", "Susan") gets the user with username "Susan"
-func (cbClient CloudBoltClient) GetCloudBoltObject(objPath string, objName string) (CloudBoltObject, error) {
-	apiurl := cbClient.BaseURL
-	apiurl.Path = fmt.Sprintf("/api/v2/%s/", objPath)
-	apiurl.RawQuery = fmt.Sprintf("filter=name:%s", url.QueryEscape(objName))
+//
+// Caveat:
+//   This makes a generic request to `/api/v2/objPath/?filter=name:objName`
+//   it returns the first element of the `_embedded` list, so if multiple objects are
+//   returned from this query, only the first one will be returned.
+//
+//   So don't lean on this without some sanity checks.
+func (c *CloudBoltClient) GetCloudBoltObject(objPath string, objName string) (*CloudBoltObject, error) {
+	apiurl := c.baseURL
+	apiurl.Path = c.apiEndpoint(objPath)
+	apiurl.RawQuery = fmt.Sprintf(FILTER_BY_NAME, url.QueryEscape(objName))
 
 	// log.Printf("[!!] apiurl in GetCloudBoltObject: %+v (%+v)", apiurl.String(), apiurl)
 
 	req, err := http.NewRequest("GET", apiurl.String(), nil)
-	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", cbClient.Token))
-	req.Header.Add("Content-Type", "application/json")
-
-	resp, err := cbClient.HTTPClient.Do(req)
 	if err != nil {
-		log.Fatalln(err)
+		return nil, err
+	}
 
-		return CloudBoltObject{}, err // Consider return nil, err
+	resp, err := c.makeRequest(req)
+	if err != nil {
+		return nil, err
 	}
 	// log.Printf("[!!] HTTP response: %+v", resp)
 
@@ -331,9 +463,13 @@ func (cbClient CloudBoltClient) GetCloudBoltObject(objPath string, objName strin
 
 	// log.Printf("[!!] CloudBoltResult response %+v", res) // HERE IS WHERE THE PANIC IS!!!
 	if len(res.Embedded) == 0 {
-		return CloudBoltObject{}, fmt.Errorf("Could not find %s with name %s. Does the user have permission to view this?", objPath, objName)
+		return nil, fmt.Errorf(
+			"Could not find %s with name %s. Does the user have permission to view this?",
+			objPath,
+			objName,
+		)
 	}
-	return res.Embedded[0], nil
+	return &res.Embedded[0], nil
 }
 
 // verifyGroup checks that all a given group is the one we intended to fetch.
@@ -342,23 +478,22 @@ func (cbClient CloudBoltClient) GetCloudBoltObject(objPath string, objName strin
 //
 // If a group has no parents, "parentPath" should be empty.
 // If a group has parents, it should be of the format "root-level-parent/sub-parent/.../closest-parent"
-func (cbClient CloudBoltClient) verifyGroup(groupPath string, parentPath string) (bool, error) {
+func (c *CloudBoltClient) verifyGroup(groupPath string, parentPath string) (bool, error) {
 	// log.Printf("Verifying group %+v with parent(s) %+v\n", groupPath, parentPath)
 	var group CloudBoltGroup
 	var parent string
 	var nextParentPath string
 
-	apiurl := cbClient.BaseURL
+	apiurl := c.baseURL
 	apiurl.Path = groupPath
 
 	req, err := http.NewRequest("GET", apiurl.String(), nil)
-	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", cbClient.Token))
-	req.Header.Add("Content-Type", "application/json")
-
-	resp, err := cbClient.HTTPClient.Do(req)
 	if err != nil {
-		log.Fatalln(err)
+		return false, err
+	}
 
+	resp, err := c.makeRequest(req)
+	if err != nil {
 		return false, err
 	}
 	if resp.StatusCode >= 300 {
@@ -390,7 +525,7 @@ func (cbClient CloudBoltClient) verifyGroup(groupPath string, parentPath string)
 	// log.Printf("[!!] nextParentPath: %+v", nextParentPath)
 	if nextParentPath != "" {
 		// log.Printf("[!!] NextParentPath is not empty, making recursive call in verifyGroup\n")
-		return cbClient.verifyGroup(group.Links.Parent.Href, nextParentPath)
+		return c.verifyGroup(group.Links.Parent.Href, nextParentPath)
 	}
 
 	// log.Printf("[!!] Group verified, returning true\n")
@@ -401,7 +536,7 @@ func (cbClient CloudBoltClient) verifyGroup(groupPath string, parentPath string)
 // "/my parent group/some subgroup/a child group/" or just "my parent group"
 //
 // verifyGroup recursively verifies that this is a valid group/subgroup.
-func (cbClient CloudBoltClient) GetGroup(groupPath string) (CloudBoltObject, error) {
+func (c *CloudBoltClient) GetGroup(groupPath string) (*CloudBoltObject, error) {
 	var res CloudBoltResult
 	var group string
 	var parentPath string
@@ -421,35 +556,34 @@ func (cbClient CloudBoltClient) GetGroup(groupPath string) (CloudBoltObject, err
 		group = groupPath
 	}
 
-	apiurl := cbClient.BaseURL
-	apiurl.Path = "/api/v2/groups/"
-	apiurl.RawQuery = fmt.Sprintf("filter=name:%s", url.QueryEscape(group))
+	apiurl := c.baseURL
+	apiurl.Path = c.apiEndpoint("groups")
+	apiurl.RawQuery = fmt.Sprintf(FILTER_BY_NAME, url.QueryEscape(group))
 
 	// log.Printf("[!!] apiurl in GetGroup: %+v (%+v)", apiurl.String(), apiurl)
 
 	req, err := http.NewRequest("GET", apiurl.String(), nil)
-	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", cbClient.Token))
-	req.Header.Add("Content-Type", "application/json")
-
-	resp, err := cbClient.HTTPClient.Do(req)
 	if err != nil {
-		log.Fatalln(err)
+		return nil, err
+	}
 
-		return CloudBoltObject{}, err
+	resp, err := c.makeRequest(req)
+	if err != nil {
+		return nil, err
 	}
 
 	json.NewDecoder(resp.Body).Decode(&res)
 
 	for _, v := range res.Embedded {
 		// log.Printf("Group is %+v\n", v)
-		groupFound, err = cbClient.verifyGroup(v.Links.Self.Href, parentPath)
+		groupFound, err = c.verifyGroup(v.Links.Self.Href, parentPath)
 
 		if groupFound {
-			return v, nil
+			return &v, nil
 		}
 	}
 
-	return CloudBoltObject{}, fmt.Errorf("Group (%s): Not Found", groupPath)
+	return nil, fmt.Errorf("Group (%s): Not Found", groupPath)
 }
 
 // DeployBlueprint deploys the given:
@@ -468,7 +602,7 @@ func (cbClient CloudBoltClient) GetGroup(groupPath string) (CloudBoltObject, err
 //               "osbuild":         "bp osbuild",
 //           }
 //       }
-func (cbClient CloudBoltClient) DeployBlueprint(grpPath string, bpPath string, resourceName string, bpItems []map[string]interface{}) (CloudBoltOrder, error) {
+func (c *CloudBoltClient) DeployBlueprint(grpPath string, bpPath string, resourceName string, bpItems []map[string]interface{}) (*CloudBoltOrder, error) {
 	var order CloudBoltOrder
 
 	deployItems := make([]map[string]interface{}, 0)
@@ -510,14 +644,13 @@ func (cbClient CloudBoltClient) DeployBlueprint(grpPath string, bpPath string, r
 
 	reqJSON, err := json.Marshal(reqData)
 	if err != nil {
-		log.Fatalln(err)
-		return order, err
+		return nil, err
 	}
 
 	// log.Printf("[!!] JSON payload in POST request to Deploy Blueprint:\n%s", string(reqJSON))
 
-	apiurl := cbClient.BaseURL
-	apiurl.Path = "/api/v2/orders/"
+	apiurl := c.baseURL
+	apiurl.Path = c.apiEndpoint("orders")
 
 	// log.Printf("[!!] apiurl in DeployBlueprint: %+v (%+v)", apiurl.String(), apiurl)
 
@@ -525,19 +658,12 @@ func (cbClient CloudBoltClient) DeployBlueprint(grpPath string, bpPath string, r
 
 	req, err := http.NewRequest("POST", apiurl.String(), reqBody)
 	if err != nil {
-		log.Fatalln(err)
-		return order, err
+		return nil, err
 	}
 
-	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", cbClient.Token))
-	req.Header.Add("Content-Type", "application/json")
-	// TODO: Make the API more responsive
-	cbClient.HTTPClient.Timeout = 60 * time.Second
-
-	resp, err := cbClient.HTTPClient.Do(req)
+	resp, err := c.makeRequest(req)
 	if err != nil {
-		log.Fatalln(err)
-		return CloudBoltOrder{}, err
+		return nil, err
 	}
 
 	// Handle some common HTTP errors
@@ -546,145 +672,150 @@ func (cbClient CloudBoltClient) DeployBlueprint(grpPath string, bpPath string, r
 		buf := new(bytes.Buffer)
 		buf.ReadFrom(resp.Body)
 		respBody := buf.String()
-		return CloudBoltOrder{}, fmt.Errorf("received a server error: %s", respBody)
+		return nil, fmt.Errorf("received a server error: %s", respBody)
 	case resp.StatusCode >= 400:
 		buf := new(bytes.Buffer)
 		buf.ReadFrom(resp.Body)
 		respBody := buf.String()
-		return CloudBoltOrder{}, fmt.Errorf("received an HTTP client error: %s", respBody)
+		return nil, fmt.Errorf("received an HTTP client error: %s", respBody)
 	default:
 		json.NewDecoder(resp.Body).Decode(&order)
 
-		return order, nil
+		return &order, nil
 	}
 }
 
 // GetOrder fetches an Order from CloudBolt
 // - Order ID (orderID) e.g., "123"; formatted into a string like "/api/v2/orders/123"
-func (cbClient CloudBoltClient) GetOrder(orderID string) (CloudBoltOrder, error) {
+func (c *CloudBoltClient) GetOrder(orderID string) (*CloudBoltOrder, error) {
 	var order CloudBoltOrder
 
-	apiurl := cbClient.BaseURL
-	apiurl.Path = fmt.Sprintf("/api/v2/orders/%s", orderID)
+	apiurl := c.baseURL
+	apiurl.Path = c.apiEndpoint("orders", orderID)
 
 	// log.Printf("[!!] apiurl in GetOrder: %+v (%+v)", apiurl.String(), apiurl)
 
 	req, err := http.NewRequest("GET", apiurl.String(), nil)
-	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", cbClient.Token))
-	req.Header.Add("Content-Type", "application/json")
+	if err != nil {
+		return nil, err
+	}
 
-	resp, err := cbClient.HTTPClient.Do(req)
+	resp, err := c.makeRequest(req)
 	if err != nil {
 		log.Fatalln(err)
 
-		return CloudBoltOrder{}, err
+		return nil, err
 	}
 
 	json.NewDecoder(resp.Body).Decode(&order)
 
-	return order, nil
+	return &order, nil
 }
 
 // GetJob fetches the Job object from CloudBolt at the given path
 // - Job Path (jobPath) e.g., "/api/v2/jobs/123/"
-func (cbClient CloudBoltClient) GetJob(jobPath string) (CloudBoltJob, error) {
+func (c *CloudBoltClient) GetJob(jobPath string) (*CloudBoltJob, error) {
 	var job CloudBoltJob
 
-	apiurl := cbClient.BaseURL
+	apiurl := c.baseURL
 	apiurl.Path = jobPath
 
 	// log.Printf("[!!] GetJob: %+v (%+v)", apiurl.String(), apiurl)
 
 	req, err := http.NewRequest("GET", apiurl.String(), nil)
-	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", cbClient.Token))
-	req.Header.Add("Content-Type", "application/json")
+	if err != nil {
+		return nil, err
+	}
 
-	resp, err := cbClient.HTTPClient.Do(req)
+	resp, err := c.makeRequest(req)
 	if err != nil {
 		log.Fatalln(err)
 
-		return CloudBoltJob{}, err
+		return nil, err
 	}
 
 	json.NewDecoder(resp.Body).Decode(&job)
 
-	return job, nil
+	return &job, nil
 }
 
 // GetResource fetches a Resource object from CloudBolt at the given path
 // - Resource Path (resourcePath) e.g., "/api/v2/resources/service/123/"
-func (cbClient CloudBoltClient) GetResource(resourcePath string) (CloudBoltResource, error) {
+func (c *CloudBoltClient) GetResource(resourcePath string) (*CloudBoltResource, error) {
 	var res CloudBoltResource
 
-	apiurl := cbClient.BaseURL
+	apiurl := c.baseURL
 	apiurl.Path = resourcePath
 
 	// log.Printf("[!!] apiurl in GetResource: %+v (%+v)", apiurl.String(), apiurl)
 
 	req, err := http.NewRequest("GET", apiurl.String(), nil)
-	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", cbClient.Token))
-	req.Header.Add("Content-Type", "application/json")
+	if err != nil {
+		return nil, err
+	}
 
-	resp, err := cbClient.HTTPClient.Do(req)
+	resp, err := c.makeRequest(req)
 	if err != nil {
 		log.Fatalln(err)
 
-		return CloudBoltResource{}, err
+		return nil, err
 	}
 
 	json.NewDecoder(resp.Body).Decode(&res)
 
-	return res, nil
+	return &res, nil
 }
 
 // GetServer fetches a Server object from CloudBolt at the given path
 // - Server Path (serverPath) e.g., "/api/v2/servers/123/"
-func (cbClient CloudBoltClient) GetServer(serverPath string) (CloudBoltServer, error) {
+func (c *CloudBoltClient) GetServer(serverPath string) (*CloudBoltServer, error) {
 	var svr CloudBoltServer
 
-	apiurl := cbClient.BaseURL
+	apiurl := c.baseURL
 	apiurl.Path = serverPath
 
 	// log.Printf("[!!] apiurl in GetServer: %+v (%+v)", apiurl.String(), apiurl)
 
 	req, err := http.NewRequest("GET", apiurl.String(), nil)
-	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", cbClient.Token))
-	req.Header.Add("Content-Type", "application/json")
+	if err != nil {
+		return nil, err
+	}
 
-	resp, err := cbClient.HTTPClient.Do(req)
+	resp, err := c.makeRequest(req)
 	if err != nil {
 		log.Fatalln(err)
-		return CloudBoltServer{}, err
+		return nil, err
 	}
 
 	json.NewDecoder(resp.Body).Decode(&svr)
 
-	return svr, nil
+	return &svr, nil
 }
 
 // SubmitAction runs an action on the CloudBolt server
 // - Action Path (actionPath) e.g., "/api/v2/actions/123/"
-func (cbClient CloudBoltClient) SubmitAction(actionPath string) (CloudBoltActionResult, error) {
+func (c *CloudBoltClient) SubmitAction(actionPath string) (*CloudBoltActionResult, error) {
 	var actionRes CloudBoltActionResult
 
-	apiurl := cbClient.BaseURL
+	apiurl := c.baseURL
 	apiurl.Path = actionPath
 
 	// log.Printf("[!!] apiurl in SubmitAction: %+v (%+v)", apiurl.String(), apiurl)
 
 	req, err := http.NewRequest("POST", apiurl.String(), nil)
-	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", cbClient.Token))
-	req.Header.Add("Content-Type", "application/json")
+	if err != nil {
+		return nil, err
+	}
 
-	resp, err := cbClient.HTTPClient.Do(req)
+	resp, err := c.makeRequest(req)
 	if err != nil {
 		log.Fatalln(err)
-		return CloudBoltActionResult{}, err
+		return nil, err
 	}
 
 	json.NewDecoder(resp.Body).Decode(&actionRes)
 
-	return actionRes, nil
+	return &actionRes, nil
 }
 
 // DecomOrder orders the deletion of a CloudBolt resource
@@ -696,7 +827,7 @@ func (cbClient CloudBoltClient) SubmitAction(actionPath string) (CloudBoltAction
 //           `/api/v2/servers/4567/`,
 //           `/api/v2/servers/891011/`,
 //       }
-func (cbClient CloudBoltClient) DecomOrder(grpPath string, envPath string, servers []string) (CloudBoltOrder, error) {
+func (c *CloudBoltClient) DecomOrder(grpPath string, envPath string, servers []string) (*CloudBoltOrder, error) {
 	var order CloudBoltOrder
 
 	decomItems := make([]map[string]interface{}, 0)
@@ -717,27 +848,25 @@ func (cbClient CloudBoltClient) DecomOrder(grpPath string, envPath string, serve
 
 	reqJSON, err := json.Marshal(reqData)
 	if err != nil {
-		log.Fatalln(err)
-		return CloudBoltOrder{}, err
+		return nil, err
 	}
 
-	apiurl := cbClient.BaseURL
-	apiurl.Path = "/api/v2/orders/"
+	apiurl := c.baseURL
+	apiurl.Path = c.apiEndpoint("orders")
 
 	// log.Printf("[!!] apiurl in DecomOrder: %+v (%+v)", apiurl.String(), apiurl)
 
 	req, err := http.NewRequest("POST", apiurl.String(), bytes.NewBuffer(reqJSON))
-	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", cbClient.Token))
-	req.Header.Add("Content-Type", "application/json")
-	req.Header.Add("Accept", "application/json")
-
-	resp, err := cbClient.HTTPClient.Do(req)
 	if err != nil {
-		log.Fatalln(err)
-		return CloudBoltOrder{}, err
+		return nil, err
+	}
+
+	resp, err := c.makeRequest(req)
+	if err != nil {
+		return nil, err
 	}
 
 	json.NewDecoder(resp.Body).Decode(&order)
 
-	return order, nil
+	return &order, nil
 }

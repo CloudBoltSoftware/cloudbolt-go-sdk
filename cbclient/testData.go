@@ -504,7 +504,7 @@ const aServer string = `{
 	}
 }`
 
-const aSubmitAction string = `{
+const aSubmitActionResponseBody string = `{
 	"run-action-job": {
 		"self": {
 			"href": "/api/v2/jobs/1234",
@@ -513,29 +513,136 @@ const aSubmitAction string = `{
 	}
 }`
 
-func bodyForTestNew(i int) string {
-	return []string{`{
-		"token": "this is a testing token"
-	}`}[i]
+const anUnauthorizedResponseBody string = `{
+	"Status": "401 Unauthorized"
+}` // TODO: Make this accurate
+
+const anAuthRequestResponseBody string = `{
+	"token": "Testing Token"
+}`
+
+func missingTokenStatusPattern(i int) int {
+	switch i {
+	// The first time the user tries to authenticate, they get a 401 Unauthorized
+	case 0:
+		return 401
+	// This is what we expect the status to be from every successful
+	// GET and POST request made to the API with a valid Auth token
+	default:
+		return 200
+	}
+}
+
+// Wraps a given variadic number of responses with the normal "request an Auth token" script.
+func missingTokenBodyPattern(responses ...string) []string {
+	return append(
+		[]string{
+			anUnauthorizedResponseBody,
+			anAuthRequestResponseBody,
+		},
+		responses...,
+	)
+}
+
+/*
+HTTP response script for TestNew() API calls
+*/
+func responsesForNew(i int) (string, int) {
+	return bodyForNew(i), 200
+}
+
+// Since New() makes no API calls, TestNew() should make no API calls as well.
+// We still pass this because we need the test to be _able_ to make API calls.
+// Those would just raise an error, which we want to catch in the tests.
+func bodyForNew(i int) string {
+	return []string{}[i]
+}
+
+/*
+HTTP response script for TestAuthenticate() API calls
+*/
+func responsesForAuthenticate(i int) (string, int) {
+	return bodyForAuthenticate(i), 200
+}
+
+func bodyForAuthenticate(i int) string {
+	return []string{
+		anAuthRequestResponseBody,
+	}[i]
+}
+
+/*
+HTTP response script for TestAuthWrappedRequest() API calls
+*/
+func responsesForAuthWrappedRequest(i int) (string, int) {
+	return bodyForAuthWrappedRequest(i), missingTokenStatusPattern(i)
+}
+
+func bodyForAuthWrappedRequest(i int) string {
+	return missingTokenBodyPattern(
+		`{"foo": "bar"}`,
+	)[i]
+}
+
+// Used to verify that when the request response is _not_ 401 or 403,
+// We just return the HTTP response without requesting a new token.
+func responsesForAuthWrappedRequestWithToken(i int) (string, int) {
+	return bodyForAuthWrappedRequestWithToken(i), 200
+}
+
+// Since we are verifying that we make only the object request and not a token request,
+// we are only returning the requested object, not wrapping the requested object
+// in `missingTokenBodyPattern`.
+func bodyForAuthWrappedRequestWithToken(i int) string {
+	return []string{
+		`{"foo": "bar"}`,
+	}[i]
+}
+
+/*
+HTTP response script for TestGetCloudBolObject() API calls
+*/
+func responseForGetCloudBoltObject(i int) (string, int) {
+	return bodyForGetCloudBoltObject(i), missingTokenStatusPattern(i)
 }
 
 func bodyForGetCloudBoltObject(i int) string {
-	return []string{
+	return missingTokenBodyPattern(
 		anObject,
-	}[i]
+	)[i]
+}
+
+/*
+HTTP response script for TestGetGroup() API calls
+*/
+func responsesForGetGroup(i int) (string, int) {
+	return bodyForGetGroup(i), missingTokenStatusPattern(i)
 }
 
 // bodyForGetGroup: A slice of responses for the GetGroup test.
 // This is a function because we cannot delcare const slices.
 // Since it's a function we accept an index parameter `i` for convenience.
 func bodyForGetGroup(i int) string {
-	return []string{
+	return missingTokenBodyPattern(
 		listOfGroups,
 		yetAnotherGroup,
 		aChildGroup,
 		aSubGroup,
 		aGroup, // Necessary?
-	}[i]
+	)[i]
+}
+
+/*
+HTTP response script for TestDeployBlueprint() API calls
+*/
+func responsesForDeployBlueprint(i int) (string, int) {
+	return bodyForDeployBlueprint(i), missingTokenStatusPattern(i)
+}
+
+func bodyForDeployBlueprint(i int) string {
+	return missingTokenBodyPattern(
+		anOrder,
+	)[i]
 }
 
 func bpOrderItems() []map[string]interface{} {
@@ -556,53 +663,95 @@ func bpOrderItems() []map[string]interface{} {
 	}
 }
 
-// bodyForDeployBlueprint ...
-func bodyForDeployBlueprint(i int) string {
-	return []string{
-		anOrder,
-	}[i]
+/*
+HTTP response script for TestVerifyGroup() API calls
+*/
+func responsesForVerifyGroup(i int) (string, int) {
+	return bodyForVerifyGroup(i), missingTokenStatusPattern(i)
 }
 
 func bodyForVerifyGroup(i int) string {
-	return []string{
+	return missingTokenBodyPattern(
 		aChildGroup,
 		aSubGroup,
 		aGroup, // Necessary?
-	}[i]
+	)[i]
+}
+
+/*
+HTTP response script for TestGetOrder() API calls
+*/
+func responsesForGetOrder(i int) (string, int) {
+	return bodyForGetOrder(i), missingTokenStatusPattern(i)
 }
 
 func bodyForGetOrder(i int) string {
-	return []string{
+	return missingTokenBodyPattern(
 		anOrder,
-	}[i]
+	)[i]
+}
+
+/*
+HTTP response script for TestGetJob() API calls
+*/
+func responsesForGetJob(i int) (string, int) {
+	return bodyForGetJob(i), missingTokenStatusPattern(i)
 }
 
 func bodyForGetJob(i int) string {
-	return []string{
+	return missingTokenBodyPattern(
 		aJob,
-	}[i]
+	)[i]
+}
+
+/*
+HTTP response script for TestGetResource() API calls
+*/
+func responsesForGetResource(i int) (string, int) {
+	return bodyForGetResource(i), missingTokenStatusPattern(i)
 }
 
 func bodyForGetResource(i int) string {
-	return []string{
+	return missingTokenBodyPattern(
 		aResource,
-	}[i]
+	)[i]
+}
+
+/*
+HTTP response script for TestGetServer() API calls
+*/
+func responsesForGetServer(i int) (string, int) {
+	return bodyForGetServer(i), missingTokenStatusPattern(i)
 }
 
 func bodyForGetServer(i int) string {
-	return []string{
+	return missingTokenBodyPattern(
 		aServer,
-	}[i]
+	)[i]
+}
+
+/*
+HTTP response script for TestSubmitAction() API calls
+*/
+func responsesForSubmitAction(i int) (string, int) {
+	return bodyForSubmitAction(i), missingTokenStatusPattern(i)
 }
 
 func bodyForSubmitAction(i int) string {
-	return []string{
-		aSubmitAction,
-	}[i]
+	return missingTokenBodyPattern(
+		aSubmitActionResponseBody,
+	)[i]
+}
+
+/*
+HTTP response script for TestDecomOrder() API calls
+*/
+func responsesForDecomOrder(i int) (string, int) {
+	return bodyForDecomOrder(i), missingTokenStatusPattern(i)
 }
 
 func bodyForDecomOrder(i int) string {
-	return []string{
+	return missingTokenBodyPattern(
 		anOrder, // TODO: aDecomOrder?
-	}[i]
+	)[i]
 }

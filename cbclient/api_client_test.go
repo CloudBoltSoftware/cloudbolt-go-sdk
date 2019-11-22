@@ -9,15 +9,17 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"testing"
+	"time"
 
 	. "github.com/onsi/gomega"
 )
 
-type fn func(int) string
+type fn func(int) (string, int)
 
 // The mockRequests data type; an array of http Requests.
 type mockRequests []*http.Request
 
+// Appends an httpRequest to a list of mockRequests
 func (req *mockRequests) append(r *http.Request) {
 	tmp := *req
 	*req = append(tmp, r)
@@ -31,45 +33,78 @@ func (req *mockRequests) append(r *http.Request) {
 // Source: https://medium.com/@xoen/2c6911805361
 func copyRequest(r *http.Request) *http.Request {
 	// Read it into the bytes buffer
-	bodyBytes, _ := ioutil.ReadAll(r.Body)
+	bodyBytes, err := ioutil.ReadAll(r.Body)
+	Expect(err).NotTo(HaveOccurred())
+
 	// Restore the io.ReadCloser to its original state
 	r.Body = ioutil.NopCloser(bytes.NewBuffer(bodyBytes)) // Use the content
 
 	return r
 }
 
+// Create a mockServer that responds to incoming events with a "responseFunc" script.
+//
+// Each request to the server is indexed (e.g., first request is 0, then 1, then 2)
+// That index is used to call the script: responseFunc(requestIndex)
+// The response func returns a tuple of (responseBody, responseStatusCode)
+// The server then writes the body and sets the status code accordingly
+//
+// Returns the server and a queue of requests that have come in.
+// The server is used to create a CloudBoltClient object.
+// The requests can be indexed and inspected to verify the API client is making the correct calls.
+// Requests usage looks like: Expect((*requests)[0].URL.Path).To(Equal("/path/to/a-resource/"))
 func mockServer(responseFunc fn) (*httptest.Server, *mockRequests) {
 	var requests mockRequests
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Duplicate this request and add it to the buffer for later inspection
 		requests.append(copyRequest(r))
 
-		w.WriteHeader(http.StatusOK)
+		// Get the body (string) and HTTP status code for this request
+		body, status := responseFunc(len(requests) - 1)
+
+		// fmt.Printf("Mock server responding with body status %d\nstatus: %s\n", status, body)
+
+		// Write the response
 		w.Header().Add("Content-Type", "application/json")
-		w.Write([]byte(responseFunc(len(requests) - 1)))
+		w.WriteHeader(status)
+		w.Write([]byte(body))
 	}))
 
+	// Return mock server with scripted responses
+	// Return requests buffer
 	return server, &requests
 }
 
+// bodyToString was created because I kept forgetting how
+// to get something useful out of http.Response.Body
 func bodyToString(b io.ReadCloser) string {
-	bodyBytes, _ := ioutil.ReadAll(b)
+	bodyBytes, err := ioutil.ReadAll(b)
+	Expect(err).NotTo(HaveOccurred())
+
 	bodyString := string(bodyBytes)
+
 	return bodyString
 }
 
+// getClient takes an httptest.Server and returns a pointer to a CloudBolt Client object
+// Uses defaults when possbile, e.g., the HTTP Client default.
 func getClient(server *httptest.Server) *CloudBoltClient {
+	protocol := "http"
 	uri, err := url.Parse(server.URL)
 	Expect(err).NotTo(HaveOccurred())
-	Expect(uri).NotTo(BeNil())
 
-	token := "Testing Token"
+	host, port, err := net.SplitHostPort(uri.Host)
+	Expect(err).NotTo(HaveOccurred())
 
-	return &CloudBoltClient{
-		BaseURL:    *uri,
-		HTTPClient: &http.Client{},
-		Token:      token,
-	}
+	username := "testUser"
+	password := "testPass"
+
+	apiVersion := "v2"
+	client := New(protocol, host, port, apiVersion, username, password, nil)
+	Expect(client).NotTo(BeNil())
+
+	return client
 }
 
 // Below is an example of how to write these tests, it includes
@@ -100,33 +135,83 @@ func TestHttpTestExample(t *testing.T) {
 */
 
 func TestNew(t *testing.T) {
-	// Register the test with omega
+	// Register the test with gomega
 	RegisterTestingT(t)
 
-	server, _ := mockServer(bodyForTestNew)
+	// Create a mock server with that accepts requests and responds with scripted responses
+	// Create a buffer of received requests
+	server, requests := mockServer(responsesForNew)
+	Expect(server).NotTo(BeNil())
+	Expect(requests).NotTo(BeNil())
 
-	protocol := "http"
-	uri, err := url.Parse(server.URL)
-	Expect(err).NotTo(HaveOccurred())
-	host, port, err := net.SplitHostPort(uri.Host)
-	Expect(err).NotTo(HaveOccurred())
-	username := "testUser"
-	password := "testPass"
-
-	client, err := New(protocol, host, port, username, password)
-	Expect(err).NotTo(HaveOccurred())
+	// Call our getClient function which also makes assertions about the process
+	client := getClient(server)
 	Expect(client).NotTo(BeNil())
-	Expect(client.Token).NotTo(BeNil())
-	Expect(client.Token).To(Equal("this is a testing token"))
+
+	// calling New() (which happened in getClient()) should make no API calls
+	Expect(len(*requests)).To(Equal(0))
+
+	serverURL, err := url.Parse(server.URL)
+	Expect(err).NotTo(HaveOccurred())
+
+	Expect(client.token).To(BeEmpty())
+	Expect(client.apiVersion).To(Equal("v2"))
+	Expect(client.username).To(Equal("testUser"))
+	Expect(client.baseURL).To(Equal(*serverURL))
+	Expect(client.password).To(Equal("testPass"))
+	Expect(client.httpClient.Timeout).To(Equal(time.Duration(60 * time.Second)))
 }
 
-func TestGetCloudBoltObject(t *testing.T) {
-	// Register the test with omega
+func TestAuthenticate(t *testing.T) {
+	// Register the test with gomega
+	RegisterTestingT(t)
+
+	// Create a mock server to accept requests and respond with scripted responses
+	// Create a buffer of requests
+	server, requests := mockServer(responsesForAuthenticate)
+	Expect(server).NotTo(BeNil())
+	Expect(requests).NotTo(BeNil())
+
+	// Initialize an CloudBolt API client
+	client := getClient(server)
+	Expect(client).NotTo(BeNil())
+
+	// At this point we have made no API requests
+	Expect(len(*requests)).To(Equal(0))
+
+	// Manually authenticate with the server
+	status, err := client.Authenticate()
+	Expect(status).Should(Equal(200)) // Questionable
+	Expect(err).NotTo(HaveOccurred())
+
+	// We only expect the API client to have made 1 requests at this point
+	Expect(len(*requests)).To(Equal(1))
+	Expect((*requests)[0].URL.Path).To(Equal("/api/v2/api-token-auth/"))
+	Expect((*requests)[0].Method).To(Equal("POST"))
+
+	// The token we should have at this point is "Testing Token"
+	Expect(client.token).To(Equal("Testing Token"))
+}
+
+// TestAuthWrapper is a fun test that verifies that when CloudBoltClient.token
+// is empty, cbClient auto-re-auths with CloudBolt.
+//
+// The timeline look like this:
+// 1. cbClient (bad token)  (Request for X)----> CloudBolt Server | Client makes request for X resource
+// 2. cbClient (bad token)  <----(Unauthorized!) CloudBolt Server | Client receives "Unauthorized" response
+// 3. cbClient (bad token)  (Request Token ----> CloudBolt Server | Client requests a new token
+// 4. cbClient (bad token)  <-------(User Token) CloudBolt Server | Client receives an auth token
+// 5. cbClient (with token) (Request for X)----> CloudBolt Server | Client re-requests X resource
+// 6. cbClient (with token) <--------(X Payload) CloudBolt Server | Client successfully receives X resource
+//
+// In the above timeline, 'bad token' may be an empty or expired token.
+func TestAuthWrappedRequest(t *testing.T) {
+	// Register the test with gomega
 	RegisterTestingT(t)
 
 	// Setup mock server
 	// Setup requests buffer
-	server, requests := mockServer(bodyForGetCloudBoltObject)
+	server, requests := mockServer(responsesForAuthWrappedRequest)
 	Expect(server).NotTo(BeNil())
 	Expect(requests).NotTo(BeNil())
 
@@ -134,27 +219,124 @@ func TestGetCloudBoltObject(t *testing.T) {
 	client := getClient(server)
 	Expect(client).NotTo(BeNil())
 
+	// To call authWrapperRequest directly we need an http.Request
+	// Use the mock server's URL
+	apiurl := client.baseURL
+	// Use a dummy path
+	apiurl.Path = "/foo/"
+	req, err := http.NewRequest("GET", apiurl.String(), nil)
+	Expect(err).NotTo(HaveOccurred())
+
+	// Call authWrappedRequest directly
+	resp, err := client.authWrappedRequest(req)
+	Expect(err).NotTo(HaveOccurred())
+	Expect(resp).NotTo(BeNil())
+
+	// This should have made three requests:
+	// 1+2. Fail to get resource, get a token
+	// 3. Successfully getting the object
+	Expect(len(*requests)).To(Equal(3))
+
+	// First request is for the thing
+	Expect((*requests)[0].URL.Path).To(Equal("/foo/"))
+	Expect((*requests)[0].Header["Authorization"]).To(Equal([]string{"Bearer"}))
+
+	// Second request is for an API token
+	Expect((*requests)[1].URL.Path).To(Equal("/api/v2/api-token-auth/"))
+	Expect((*requests)[1].Method).To(Equal("POST"))
+
+	// Third request is for the thing again with an API token
+	Expect((*requests)[2].URL.Path).To(Equal("/foo/"))
+	Expect((*requests)[2].Header["Authorization"]).To(Equal([]string{"Bearer Testing Token"}))
+
+	// Check that the final response body was as expected
+	body := bodyToString(resp.Body)
+	Expect(body).To(MatchJSON(`{"foo": "bar"}`))
+}
+
+// This validates that when the server responds with a "good" http status,
+// the auth wrapper does not make a request for a new token.
+func TestAuthWrappedRequestWithValidToken(t *testing.T) {
+	// Register the test with gomega
+	RegisterTestingT(t)
+
+	// Create server, requests, and client.
+	server, requests := mockServer(responsesForAuthWrappedRequestWithToken)
+	Expect(server).NotTo(BeNil())
+	Expect(requests).NotTo(BeNil())
+
+	// Get an API client
+	client := getClient(server)
+	Expect(client).NotTo(BeNil())
+
+	// We should have made no API requests at this point
+	Expect(len(*requests)).To(Equal(0))
+
+	// To call authWrapper we need to create an http.Request object
+	// Use the mock server base URL
+	apiurl := client.baseURL
+	// Set a dummy path
+	apiurl.Path = "/foo/"
+	// Create the HTTP request object
+	req, err := http.NewRequest("GET", apiurl.String(), nil)
+	Expect(err).NotTo(HaveOccurred())
+
+	// call the request auth wrapper
+	resp, err := client.authWrappedRequest(req)
+	Expect(err).NotTo(HaveOccurred())
+	Expect(resp).NotTo(BeNil())
+
+	// The wrapper got a 200 response the first time so it should have made a total of 1 requests
+	Expect(len(*requests)).To(Equal(1))
+
+	// The body needs to be parsed and checked
+	body := bodyToString(resp.Body)
+	Expect(body).To(MatchJSON(`{"foo": "bar"}`))
+}
+
+func TestGetCloudBoltObject(t *testing.T) {
+	// Register the test with gomega
+	RegisterTestingT(t)
+
+	// Setup mock server with scripted responses
+	// Setup requests buffer
+	server, requests := mockServer(responseForGetCloudBoltObject)
+	Expect(server).NotTo(BeNil())
+	Expect(requests).NotTo(BeNil())
+
+	// Setup CloudBolt Client
+	client := getClient(server)
+	Expect(client).NotTo(BeNil())
+
+	// Make a request to get the object at /api/v2/things/?filter=name:Thing+2
 	obj, err := client.GetCloudBoltObject("things", "Thing 2")
 	Expect(err).NotTo(HaveOccurred())
 	Expect(obj).NotTo(BeNil())
 
-	Expect((*requests)[0].URL.Path).To(Equal("/api/v2/things/"))
-	Expect((*requests)[0].URL.RawQuery).To(Equal("filter=name:Thing+2"))
-	Expect((*requests)[0].Header["Authorization"]).To(Equal([]string{"Bearer Testing Token"}))
+	// This should have made three requests:
+	// 1+2. Fail to get resource, get a token
+	// 3. Successfully getting the object
+	Expect(len(*requests)).To(Equal(3))
 
+	// We expect that one call to be to the order's endpoint
+	Expect((*requests)[2].URL.Path).To(Equal("/api/v2/things/"))
+	Expect((*requests)[2].URL.RawQuery).To(Equal("filter=name:Thing+2"))
+	Expect((*requests)[2].Header["Authorization"]).To(Equal([]string{"Bearer Testing Token"}))
+
+	// The final object should have been parsed correctly
 	Expect(obj.Links.Self.Href).To(Equal("/api/v2/things/XYZ-abcdefgh/"))
 	Expect(obj.Links.Self.Title).To(Equal("Thing 2"))
 	Expect(obj.Name).To(Equal("Thing 2"))
 	Expect(obj.ID).To(Equal("3"))
-
 }
 
 func TestVerifyGroup(t *testing.T) {
-	// Register the test with omega
+	// Register the test with gomega
 	RegisterTestingT(t)
 
-	// Setup mock server
-	server, _ := mockServer(bodyForVerifyGroup)
+	// Setup mock server with scripted responses
+	// Setup requests buffer
+	server, requests := mockServer(responsesForVerifyGroup)
 	Expect(server).NotTo(BeNil())
 
 	// Setup CloudBolt Client
@@ -167,10 +349,16 @@ func TestVerifyGroup(t *testing.T) {
 	good, err := client.verifyGroup(sampleGroupPath, sampleParentPath)
 	Expect(good).To(BeTrue())
 	Expect(err).NotTo(HaveOccurred())
+
+	// We expect that to find this group we needed to make 4 API calls
+	// 1+2. Fail to get resource, get a token
+	// 3. make request to /api/v2/groups/GRP-an0thrgrp/ to verify `the subgroup` is this group's parent
+	// 4. make request to /api/v2/groups/... to verify `the group` is `the subgroup`'s parent.
+	Expect(len(*requests)).To(Equal(4))
 }
 
 // This is a fun test, let's break down what exactly happens.
-// If you look in `testData` at `bodyForGetGroup` you see we return four things:
+// If you look in `testData` at `responsesForGetGroup` you see we return four things:
 //   - listOfGroups: a response to the query /api/v2/groups/?filter=name:the+childgroup
 //   - yetAnotherGroup: a decoy group with the same name. This is allowed in
 //     CloudBolt since group names only need to be unique _within_ a subgroup.
@@ -185,12 +373,12 @@ func TestVerifyGroup(t *testing.T) {
 //      the root of the search so we return success in `verifyGroup`, passing the
 //      test and finishing the call to GetGroup().
 func TestGetGroup(t *testing.T) {
-	// Register the test with omega
+	// Register the test with gomega
 	RegisterTestingT(t)
 
-	// Setup mock server
+	// Setup mock server with scripted responses
 	// Setup requests buffer
-	server, requests := mockServer(bodyForGetGroup)
+	server, requests := mockServer(responsesForGetGroup)
 	Expect(server).NotTo(BeNil())
 	Expect(requests).NotTo(BeNil())
 
@@ -202,20 +390,28 @@ func TestGetGroup(t *testing.T) {
 	Expect(err).NotTo(HaveOccurred())
 	Expect(group).NotTo(BeNil())
 
-	Expect(len((*requests))).To(Equal(4))
+	// We expect 6 (wow) requests to get this group!
+	// 1+2. Try to make a request and fail, get an auth token
+	// 3. Get response from /api/v2/groups/?filter=name:the+childgroup
+	// Everthing below here happens in `CloudBoltClient.verifyGroup()`
+	// 4. Look for parent of first response, this is not the right one; it has no parent
+	// 5. Verify `the subgroup` is the parent of `the childgroup`
+	// 6. Verify `the group` is the parent of `the subgroup`
+	Expect(len((*requests))).To(Equal(6))
 
-	Expect((*requests)[0].URL.Path).To(Equal("/api/v2/groups/"))
-	Expect((*requests)[0].URL.RawQuery).To(Equal("filter=name:the+childgroup"))
-	Expect((*requests)[0].Header["Authorization"]).To(Equal([]string{"Bearer Testing Token"}))
-
-	Expect((*requests)[1].URL.Path).To(Equal("/api/v2/groups/GRP-y3tan0thrgrp/"))
-	Expect((*requests)[1].URL.RawQuery).To(Equal(""))
-	Expect((*requests)[1].Header["Authorization"]).To(Equal([]string{"Bearer Testing Token"}))
-
-	Expect((*requests)[2].URL.Path).To(Equal("/api/v2/groups/GRP-an0thrgrp/"))
-	Expect((*requests)[2].URL.RawQuery).To(Equal(""))
+	Expect((*requests)[2].URL.Path).To(Equal("/api/v2/groups/"))
+	Expect((*requests)[2].URL.RawQuery).To(Equal("filter=name:the+childgroup"))
 	Expect((*requests)[2].Header["Authorization"]).To(Equal([]string{"Bearer Testing Token"}))
 
+	Expect((*requests)[3].URL.Path).To(Equal("/api/v2/groups/GRP-y3tan0thrgrp/"))
+	Expect((*requests)[3].URL.RawQuery).To(Equal(""))
+	Expect((*requests)[3].Header["Authorization"]).To(Equal([]string{"Bearer Testing Token"}))
+
+	Expect((*requests)[4].URL.Path).To(Equal("/api/v2/groups/GRP-an0thrgrp/"))
+	Expect((*requests)[4].URL.RawQuery).To(Equal(""))
+	Expect((*requests)[4].Header["Authorization"]).To(Equal([]string{"Bearer Testing Token"}))
+
+	// The CloudBolt Group object should be parsed correctly
 	Expect(group.Links.Self.Href).To(Equal("/api/v2/groups/GRP-an0thrgrp/"))
 	Expect(group.Links.Self.Title).To(Equal("the childgroup"))
 	Expect(group.Name).To(Equal("the childgroup"))
@@ -223,12 +419,12 @@ func TestGetGroup(t *testing.T) {
 }
 
 func TestDeployBlueprint(t *testing.T) {
-	// Register the test with omega
+	// Register the test with gomega
 	RegisterTestingT(t)
 
-	// Setup mock server
+	// Setup mock server with scripted responses
 	// Setup requests buffer
-	server, requests := mockServer(bodyForDeployBlueprint)
+	server, requests := mockServer(responsesForDeployBlueprint)
 	Expect(server).NotTo(BeNil())
 	Expect(requests).NotTo(BeNil())
 
@@ -245,12 +441,16 @@ func TestDeployBlueprint(t *testing.T) {
 	Expect(err).NotTo(HaveOccurred())
 	Expect(cbOrder).NotTo(BeNil())
 
-	Expect((*requests)[0].URL.Path).To(Equal("/api/v2/orders/"))
-	Expect((*requests)[0].Header["Authorization"]).To(Equal([]string{"Bearer Testing Token"}))
+	// This should have made three requests:
+	// 1+2. Fail to get resource, get a token
+	// 3. Successfully getting the object
+	Expect(len(*requests)).To(Equal(3))
 
-	// An example parsed payload we should get back from client.DeployBlueprint(...)
-	// Below this comment we make assertions about the parsed response
-	// TODO: Consider if we should just compare order to some `expectedOrder` object...
+	// We expect that one call to be to the order's endpoint
+	Expect((*requests)[2].URL.Path).To(Equal("/api/v2/orders/"))
+	Expect((*requests)[2].Header["Authorization"]).To(Equal([]string{"Bearer Testing Token"}))
+
+	// The CloudBolt Deploy Blueprint Order object should be parsed correctly
 	Expect(cbOrder.Links.Self.Href).To(Equal("/api/v2/orders/101/"))
 	Expect(cbOrder.Links.Self.Title).To(Equal("Order id 101"))
 	Expect(cbOrder.Links.Group.Href).To(Equal("/api/v2/groups/GRP-th3gr0up/"))
@@ -280,12 +480,12 @@ func TestDeployBlueprint(t *testing.T) {
 }
 
 func TestGetOrder(t *testing.T) {
-	// Register the test with omega
+	// Register the test with gomega
 	RegisterTestingT(t)
 
-	// Setup mock server
+	// Setup mock server with scripted responses
 	// Setup requests buffer
-	server, requests := mockServer(bodyForGetOrder)
+	server, requests := mockServer(responsesForGetOrder)
 	Expect(server).NotTo(BeNil())
 	Expect(requests).NotTo(BeNil())
 
@@ -302,11 +502,15 @@ func TestGetOrder(t *testing.T) {
 	Expect(cbOrder).NotTo(BeNil())
 	Expect(err).NotTo(HaveOccurred())
 
-	// We expect that `GetOrder` only makes one call to the API
-	Expect(len(*requests)).To(Equal(1))
-	// We expect that one call to be to the order's endpoint
-	Expect((*requests)[0].URL.Path).To(Equal("/api/v2/orders/101"))
+	// This should have made three requests:
+	// 1+2. Fail to get order, get a token
+	// 3. Successfully getting the order
+	Expect(len(*requests)).To(Equal(3))
 
+	// The last request is the one we care about
+	Expect((*requests)[2].URL.Path).To(Equal("/api/v2/orders/101/"))
+
+	// The CloudBolt Order object should be parsed correctly
 	Expect(cbOrder.Links.Self.Href).To(Equal("/api/v2/orders/101/"))
 	Expect(cbOrder.Links.Self.Title).To(Equal("Order id 101"))
 	Expect(cbOrder.Links.Group.Href).To(Equal("/api/v2/groups/GRP-th3gr0up/"))
@@ -332,12 +536,12 @@ func TestGetOrder(t *testing.T) {
 }
 
 func TestGetJob(t *testing.T) {
-	// Register the test with omega
+	// Register the test with gomega
 	RegisterTestingT(t)
 
-	// Setup mock server
+	// Setup mock server with scripted responses
 	// Setup requests buffer
-	server, requests := mockServer(bodyForGetJob)
+	server, requests := mockServer(responsesForGetJob)
 	Expect(server).NotTo(BeNil())
 	Expect(requests).NotTo(BeNil())
 
@@ -354,9 +558,15 @@ func TestGetJob(t *testing.T) {
 	Expect(cbJob).NotTo(BeNil())
 	Expect(err).NotTo(HaveOccurred())
 
-	Expect(len(*requests)).To(Equal(1))
-	Expect((*requests)[0].URL.Path).To(Equal("/path/to/job_id"))
+	// This should have made three requests:
+	// 1+2. Fail to get job, get a token
+	// 3. Successfully getting the job
+	Expect(len(*requests)).To(Equal(3))
 
+	// The last request is the one we care about
+	Expect((*requests)[2].URL.Path).To(Equal("/path/to/job_id"))
+
+	// The CloudBolt Job object should be parsed correctly
 	Expect(cbJob.Links.Self.Href).To(Equal("/api/v2/jobs/1234/"))
 	Expect(cbJob.Links.Self.Title).To(Equal("Job id 1234"))
 	Expect(cbJob.Links.Owner.Href).To(Equal("/api/v2/users/42/"))
@@ -385,12 +595,12 @@ func TestGetJob(t *testing.T) {
 }
 
 func TestGetResource(t *testing.T) {
-	// Register test with omega
+	// Register test with gomega
 	RegisterTestingT(t)
 
-	// Setup mock server
+	// Setup mock server with scripted responses
 	// Setup requests buffer
-	server, requests := mockServer(bodyForGetResource)
+	server, requests := mockServer(responsesForGetResource)
 	Expect(server).NotTo(BeNil())
 	Expect(requests).NotTo(BeNil())
 
@@ -407,9 +617,15 @@ func TestGetResource(t *testing.T) {
 	Expect(cbResource).NotTo(BeNil())
 	Expect(err).NotTo(HaveOccurred())
 
-	Expect(len(*requests)).To(Equal(1))
-	Expect((*requests)[0].URL.Path).To(Equal("/path/to/resource_id"))
+	// This should have made three requests:
+	// 1+2. Fail to get resource, get a token
+	// 3. Successfully getting the resource
+	Expect(len(*requests)).To(Equal(3))
 
+	// The last request is the one we care about
+	Expect((*requests)[2].URL.Path).To(Equal("/path/to/resource_id"))
+
+	// The CloudBolt Resource object should be parsed correctly
 	Expect(cbResource.Links.Self.Href).To(Equal("/api/v2/resources/big_service/2048/"))
 	Expect(cbResource.Links.Self.Title).To(Equal("A Big Service 2048"))
 	Expect(cbResource.Links.Blueprint.Href).To(Equal("/api/v2/blueprints/BP-ab1u3prt"))
@@ -436,12 +652,12 @@ func TestGetResource(t *testing.T) {
 }
 
 func TestGetServer(t *testing.T) {
-	// Register the test with omega
+	// Register the test with gomega
 	RegisterTestingT(t)
 
-	// Setup mock server
+	// Setup mock server with scripted responses
 	// Setup requests buffer
-	server, requests := mockServer(bodyForGetServer)
+	server, requests := mockServer(responsesForGetServer)
 	Expect(server).NotTo(BeNil())
 	Expect(requests).NotTo(BeNil())
 
@@ -458,10 +674,15 @@ func TestGetServer(t *testing.T) {
 	Expect(cbServer).NotTo(BeNil())
 	Expect(err).NotTo(HaveOccurred())
 
-	Expect(len(*requests)).To(Equal(1))
-	Expect((*requests)[0].URL.Path).To(Equal("/path/to/server_id"))
+	// This should have made three requests:
+	// 1+2. Fail to get server, get a token
+	// 3. Successfully getting the server
+	Expect(len(*requests)).To(Equal(3))
 
-	// Make assertions about the CloudBolt Server object
+	// The last request is the one we care about
+	Expect((*requests)[2].URL.Path).To(Equal("/path/to/server_id"))
+
+	// The CloudBolt Server object should be parsed correctly
 	Expect(cbServer.Links.Self.Href).To(Equal("/api/v2/servers/128/"))
 	Expect(cbServer.Links.Self.Title).To(Equal("a-server-128"))
 	Expect(cbServer.Links.Owner.Href).To(Equal("/api/v2/users/42/"))
@@ -515,12 +736,12 @@ func TestGetServer(t *testing.T) {
 }
 
 func TestSubmitAction(t *testing.T) {
-	// Register the test with omega
+	// Register the test with gomega
 	RegisterTestingT(t)
 
-	// Setup mock server
+	// Setup mock server with scripted responses
 	// Setup requests buffer
-	server, requests := mockServer(bodyForSubmitAction)
+	server, requests := mockServer(responsesForSubmitAction)
 	Expect(server).NotTo(BeNil())
 	Expect(requests).NotTo(BeNil())
 
@@ -537,20 +758,26 @@ func TestSubmitAction(t *testing.T) {
 	Expect(cbActionResult).NotTo(BeNil())
 	Expect(err).NotTo(HaveOccurred())
 
-	Expect(len(*requests)).To(Equal(1))
-	Expect((*requests)[0].URL.Path).To(Equal("/path/to/action_id"))
+	// This should have made three requests:
+	// 1+2. Fail to POST action, get a token
+	// 3. Successfully POST the action
+	Expect(len(*requests)).To(Equal(3))
 
+	// The last request is the one we care about
+	Expect((*requests)[2].URL.Path).To(Equal("/path/to/action_id"))
+
+	// The final object should have been parsed correctly
 	Expect(cbActionResult.RunActionJob.Self.Href).To(Equal("/api/v2/jobs/1234"))
 	Expect(cbActionResult.RunActionJob.Self.Title).To(Equal("foo"))
 }
 
 func TestDecomOrder(t *testing.T) {
-	// Register the test with omega
+	// Register the test with gomega
 	RegisterTestingT(t)
 
-	// Setup mock server
+	// Setup mock server with scripted responses
 	// Setup requests buffer
-	server, requests := mockServer(bodyForDecomOrder)
+	server, requests := mockServer(responsesForDecomOrder)
 	Expect(server).NotTo(BeNil())
 	Expect(requests).NotTo(BeNil())
 
@@ -569,13 +796,20 @@ func TestDecomOrder(t *testing.T) {
 	Expect(cbOrder).NotTo(BeNil())
 	Expect(err).NotTo(HaveOccurred())
 
-	Expect(len(*requests)).To(Equal(1))
-	Expect((*requests)[0].URL.Path).To(Equal("/api/v2/orders/"))
-	Expect((*requests)[0].Method).To(Equal("POST"))
+	// This should have made three requests:
+	// 1+2. Fail to POST the decom, get a token
+	// 3. Successfully POST the decom
+	Expect(len(*requests)).To(Equal(3))
+
+	// The last request is the one we care about
+	Expect((*requests)[2].URL.Path).To(Equal("/api/v2/orders/"))
+	Expect((*requests)[2].Method).To(Equal("POST"))
+
 	expectedJSON := `{"group":"/path/to/group_id","items":{"decom-items":[{"environment":"/path/to/env_id","servers":["/path/to/server1_id","/path/to/server2_id","/path/to/server3_id"]}]},"submit-now":"true"}`
-	requestBody := bodyToString((*requests)[0].Body)
+	requestBody := bodyToString((*requests)[2].Body)
 	Expect(requestBody).To(MatchJSON(expectedJSON))
 
+	// The final object should have been parsed correctly
 	Expect(cbOrder.Links.Self.Href).To(Equal("/api/v2/orders/101/"))
 	Expect(cbOrder.Links.Self.Title).To(Equal("Order id 101"))
 	Expect(cbOrder.Links.Group.Href).To(Equal("/api/v2/groups/GRP-th3gr0up/"))
@@ -591,4 +825,19 @@ func TestDecomOrder(t *testing.T) {
 	Expect(cbOrder.Name).To(Equal("the order"))
 	Expect(cbOrder.ID).To(Equal("1602"))
 	Expect(cbOrder.Status).To(Equal("ACTIVE"))
+}
+
+func testAPIEndpoint(t *testing.T) {
+	RegisterTestingT(t)
+
+	// Create an API client with a strange API version
+	client := New("https", "my.cloudbolt", "1234", "aStrangeVersion", "uname", "bar", nil)
+
+	// When nothing is passed, this is the the base API path
+	basePath := client.apiEndpoint()
+	Expect(basePath).To(Equal("/api/aStrangeVersion/"))
+
+	// When many things are passed it formats them as a path in order
+	longEndpoint := client.apiEndpoint("a", "b", "c")
+	Expect(longEndpoint).To(Equal("/api/aStrangeVersion/a/b/c/"))
 }
