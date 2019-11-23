@@ -1,5 +1,15 @@
 package cbclient
 
+/*
+Organization note:
+1. Imports
+2. Constants
+3. Public types
+4. Private types
+6. Public funcs
+7. Private funcs
+*/
+
 import (
 	"bytes"
 	"encoding/json"
@@ -335,91 +345,6 @@ func (c *CloudBoltClient) Authenticate() (int, error) {
 	return resp.StatusCode, nil
 }
 
-// makeRequest wrapps most HTTP requests by adding:
-// - Set Content Type to JSON
-// - Set Accept to JSON
-// - Calling authWrappedRequest
-func (c *CloudBoltClient) makeRequest(req *http.Request) (*http.Response, error) {
-	// Sending and Accepting JSON
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Accept", "application/json")
-
-	return c.authWrappedRequest(req)
-}
-
-// makeRequest wraps the normal HTTP request by re-authenticating if we get an
-// "Unauthorized" HTTP response.
-//
-// if the first attempt at the request returns a 401 or 403 HTTP Status Code
-// it Attempts exactly one call to CloudBoltClient.Authenticate() and resets the request token.
-func (c *CloudBoltClient) authWrappedRequest(req *http.Request) (*http.Response, error) {
-	// Add the Auth token to the request
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.token))
-
-	// Attempt to make the given HTTP request
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return nil, err
-	}
-
-	switch resp.StatusCode {
-	// Handle common HTTP "auth" related Status Codes
-	case 401, 403:
-		// Re-authenticate with the API
-		_, err := c.Authenticate()
-		if err != nil {
-			return nil, err
-		}
-
-		// Re-add the auth token which should have updated
-		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.token))
-
-		// Make the request again
-		// We assume we have valid Auth credentials
-		resp, err := c.httpClient.Do(req)
-		if err != nil {
-			return nil, err
-		}
-
-		// Return the post-re-auth response
-		// This may still get a bad HTTP error
-		return resp, nil
-
-	// If we didn't get one of the those 40x Status Codes,
-	// then pass through the original result
-	default:
-		// Return the original response
-		return resp, nil
-	}
-}
-
-// apiEndpoint standardizes getting a CloudBolt API endpoint
-// Pass in a variadic number of entries and they are formatted like so:
-// apiEndpoint("foo", "bar", "baz") -> /api/{apiVersion}/foo/bar/baz/
-//
-// Only returns the path, not the prepending "https://host:port"
-func (c *CloudBoltClient) apiEndpoint(paths ...string) string {
-	// Create a slice ["api", "someVersion"]
-	basePathSlice := []string{
-		"api",
-		c.apiVersion,
-	}
-
-	// Concatenate basePathSlice with the user provided paths
-	fullPath := append(
-		basePathSlice,
-		paths...,
-	)
-
-	// Format the array of path entries as "api/{apiVersion}/path/to/thing"
-	// Note this does not include the root and trailing "/" which we want
-	formattedPath := path.Join(fullPath...)
-
-	// Formats the result to include the root and trailing slashes
-	// e.g., "/api/{apiVersion}/path/to/thing/"
-	return fmt.Sprintf("/%s/", formattedPath)
-}
-
 // GetCloudBoltObject fetches a given object of type "objPath" with the name "objName"
 // e.g., GetCloudBoltObject("users", "Susan") gets the user with username "Susan"
 //
@@ -464,67 +389,6 @@ func (c *CloudBoltClient) GetCloudBoltObject(objPath string, objName string) (*C
 		)
 	}
 	return &res.Embedded[0], nil
-}
-
-// verifyGroup checks that all a given group is the one we intended to fetch.
-//
-// groupPath is the API path to the group, e.g., "/api/v2/groups/GRP-123456"
-//
-// If a group has no parents, "parentPath" should be empty.
-// If a group has parents, it should be of the format "root-level-parent/sub-parent/.../closest-parent"
-func (c *CloudBoltClient) verifyGroup(groupPath string, parentPath string) (bool, error) {
-	// log.Printf("Verifying group %+v with parent(s) %+v\n", groupPath, parentPath)
-	var parent string
-	var nextParentPath string
-
-	apiurl := c.baseURL
-	apiurl.Path = groupPath
-
-	req, err := http.NewRequest("GET", apiurl.String(), nil)
-	if err != nil {
-		return false, err
-	}
-
-	resp, err := c.makeRequest(req)
-	if err != nil {
-		return false, err
-	}
-	if resp.StatusCode >= 300 {
-		log.Fatalln(resp.Status)
-
-		return false, errors.New(resp.Status)
-	}
-
-	// We Decode the data because we already have an io.Reader on hand
-	var group CloudBoltGroup
-	json.NewDecoder(resp.Body).Decode(&group)
-
-	nextIndex := strings.LastIndex(parentPath, "/")
-
-	// log.Printf("[!!] parentPath: %+v", parentPath)
-	// log.Printf("[!!] strings.LastIndex(parentPath, '/')+1: %+v", nextIndex+1)
-	if nextIndex >= 0 {
-		parent = parentPath[nextIndex+1:]
-		nextParentPath = parentPath[:nextIndex]
-		// log.Printf("[!!] NextIndex >= 0 so parent: %+v, nextParentPath %+v", parent, nextParentPath)
-	} else {
-		parent = parentPath
-		// log.Printf("[!!] NextIndex < 0 so parent: %+v", parent)
-	}
-
-	if group.Links.Parent.Title != parent {
-		// log.Printf("[!!] group.Links.Parent.Title '%+v' !=? parent '%+v'\nReturning False\n", group.Links.Parent.Title, parent)
-		return false, nil
-	}
-
-	// log.Printf("[!!] nextParentPath: %+v", nextParentPath)
-	if nextParentPath != "" {
-		// log.Printf("[!!] NextParentPath is not empty, making recursive call in verifyGroup\n")
-		return c.verifyGroup(group.Links.Parent.Href, nextParentPath)
-	}
-
-	// log.Printf("[!!] Group verified, returning true\n")
-	return true, nil
 }
 
 // GetGroup accepts a groupPath string parameter of the following format:
@@ -865,4 +729,150 @@ func (c *CloudBoltClient) DecomOrder(grpPath string, envPath string, servers []s
 	json.NewDecoder(resp.Body).Decode(&order)
 
 	return &order, nil
+}
+
+// apiEndpoint standardizes getting a CloudBolt API endpoint
+// Pass in a variadic number of entries and they are formatted like so:
+// apiEndpoint("foo", "bar", "baz") -> /api/{apiVersion}/foo/bar/baz/
+//
+// Only returns the path, not the prepending "https://host:port"
+func (c *CloudBoltClient) apiEndpoint(paths ...string) string {
+	// Create a slice ["api", "someVersion"]
+	basePathSlice := []string{
+		"api",
+		c.apiVersion,
+	}
+
+	// Concatenate basePathSlice with the user provided paths
+	fullPath := append(
+		basePathSlice,
+		paths...,
+	)
+
+	// Format the array of path entries as "api/{apiVersion}/path/to/thing"
+	// Note this does not include the root and trailing "/" which we want
+	formattedPath := path.Join(fullPath...)
+
+	// Formats the result to include the root and trailing slashes
+	// e.g., "/api/{apiVersion}/path/to/thing/"
+	return fmt.Sprintf("/%s/", formattedPath)
+}
+
+// makeRequest wraps the normal HTTP request by re-authenticating if we get an
+// "Unauthorized" HTTP response.
+//
+// if the first attempt at the request returns a 401 or 403 HTTP Status Code
+// it Attempts exactly one call to CloudBoltClient.Authenticate() and resets the request token.
+func (c *CloudBoltClient) authWrappedRequest(req *http.Request) (*http.Response, error) {
+	// Add the Auth token to the request
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.token))
+
+	// Attempt to make the given HTTP request
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+
+	switch resp.StatusCode {
+	// Handle common HTTP "auth" related Status Codes
+	case 401, 403:
+		// Re-authenticate with the API
+		_, err := c.Authenticate()
+		if err != nil {
+			return nil, err
+		}
+
+		// Re-add the auth token which should have updated
+		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.token))
+
+		// Make the request again
+		// We assume we have valid Auth credentials
+		resp, err := c.httpClient.Do(req)
+		if err != nil {
+			return nil, err
+		}
+
+		// Return the post-re-auth response
+		// This may still get a bad HTTP error
+		return resp, nil
+
+	// If we didn't get one of the those 40x Status Codes,
+	// then pass through the original result
+	default:
+		// Return the original response
+		return resp, nil
+	}
+}
+
+// makeRequest wrapps most HTTP requests by adding:
+// - Set Content Type to JSON
+// - Set Accept to JSON
+// - Calling authWrappedRequest
+func (c *CloudBoltClient) makeRequest(req *http.Request) (*http.Response, error) {
+	// Sending and Accepting JSON
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
+
+	return c.authWrappedRequest(req)
+}
+
+// verifyGroup checks that all a given group is the one we intended to fetch.
+//
+// groupPath is the API path to the group, e.g., "/api/v2/groups/GRP-123456"
+//
+// If a group has no parents, "parentPath" should be empty.
+// If a group has parents, it should be of the format "root-level-parent/sub-parent/.../closest-parent"
+func (c *CloudBoltClient) verifyGroup(groupPath string, parentPath string) (bool, error) {
+	// log.Printf("Verifying group %+v with parent(s) %+v\n", groupPath, parentPath)
+	var parent string
+	var nextParentPath string
+
+	apiurl := c.baseURL
+	apiurl.Path = groupPath
+
+	req, err := http.NewRequest("GET", apiurl.String(), nil)
+	if err != nil {
+		return false, err
+	}
+
+	resp, err := c.makeRequest(req)
+	if err != nil {
+		return false, err
+	}
+	if resp.StatusCode >= 300 {
+		log.Fatalln(resp.Status)
+
+		return false, errors.New(resp.Status)
+	}
+
+	// We Decode the data because we already have an io.Reader on hand
+	var group CloudBoltGroup
+	json.NewDecoder(resp.Body).Decode(&group)
+
+	nextIndex := strings.LastIndex(parentPath, "/")
+
+	// log.Printf("[!!] parentPath: %+v", parentPath)
+	// log.Printf("[!!] strings.LastIndex(parentPath, '/')+1: %+v", nextIndex+1)
+	if nextIndex >= 0 {
+		parent = parentPath[nextIndex+1:]
+		nextParentPath = parentPath[:nextIndex]
+		// log.Printf("[!!] NextIndex >= 0 so parent: %+v, nextParentPath %+v", parent, nextParentPath)
+	} else {
+		parent = parentPath
+		// log.Printf("[!!] NextIndex < 0 so parent: %+v", parent)
+	}
+
+	if group.Links.Parent.Title != parent {
+		// log.Printf("[!!] group.Links.Parent.Title '%+v' !=? parent '%+v'\nReturning False\n", group.Links.Parent.Title, parent)
+		return false, nil
+	}
+
+	// log.Printf("[!!] nextParentPath: %+v", nextParentPath)
+	if nextParentPath != "" {
+		// log.Printf("[!!] NextParentPath is not empty, making recursive call in verifyGroup\n")
+		return c.verifyGroup(group.Links.Parent.Href, nextParentPath)
+	}
+
+	// log.Printf("[!!] Group verified, returning true\n")
+	return true, nil
 }

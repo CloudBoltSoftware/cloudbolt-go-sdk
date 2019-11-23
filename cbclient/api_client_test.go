@@ -827,7 +827,7 @@ func TestDecomOrder(t *testing.T) {
 	Expect(cbOrder.Status).To(Equal("ACTIVE"))
 }
 
-func testAPIEndpoint(t *testing.T) {
+func TestAPIEndpoint(t *testing.T) {
 	RegisterTestingT(t)
 
 	// Create an API client with a strange API version
