@@ -504,9 +504,14 @@ const aServer string = `{
 	}
 }`
 
-const aSubmitAction string = `
-	...
-`
+const aSubmitAction string = `{
+	"run-action-job": {
+		"self": {
+			"href": "/api/v2/jobs/1234",
+			"title": "foo"
+		}
+	}
+}`
 
 func bodyForTestNew(i int) string {
 	return []string{`{
