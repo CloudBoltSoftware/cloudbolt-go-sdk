@@ -540,11 +540,8 @@ func TestSubmitAction(t *testing.T) {
 	Expect(len(*requests)).To(Equal(1))
 	Expect((*requests)[0].URL.Path).To(Equal("/path/to/action_id"))
 
-	Expect(cbActionResult.RunActionJob.Self.Href).To(Equal(""))
-	Expect(cbActionResult.RunActionJob.Self.Title).To(Equal(""))
-
-	// TODO: This forces the test to fail until I am done writing it
-	Expect(nil).NotTo(BeNil())
+	Expect(cbActionResult.RunActionJob.Self.Href).To(Equal("/api/v2/jobs/1234"))
+	Expect(cbActionResult.RunActionJob.Self.Title).To(Equal("foo"))
 }
 
 func TestDecomOrder(t *testing.T) {
