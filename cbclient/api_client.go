@@ -773,9 +773,10 @@ func (c *CloudBoltClient) authWrappedRequest(req *http.Request) (*http.Response,
 		return nil, err
 	}
 
-	switch resp.StatusCode {
-	// Handle common HTTP "auth" related Status Codes
-	case 401, 403:
+	// log.Printf("[!!] Auth Wrapped Request Response: %+v", resp)
+
+	// (Bluntly) Handles common HTTP "auth" related Status Codes
+	if resp.StatusCode >= 400 {
 		// Re-authenticate with the API
 		_, err := c.Authenticate()
 		if err != nil {
@@ -796,12 +797,12 @@ func (c *CloudBoltClient) authWrappedRequest(req *http.Request) (*http.Response,
 		// This may still get a bad HTTP error
 		return resp, nil
 
-	// If we didn't get one of the those 40x Status Codes,
-	// then pass through the original result
-	default:
-		// Return the original response
-		return resp, nil
 	}
+
+	// If we didn't get one of the those 50x/40x Status Codes,
+	// then pass through the original result
+	// Return the original response
+	return resp, nil
 }
 
 // makeRequest wrapps most HTTP requests by adding:

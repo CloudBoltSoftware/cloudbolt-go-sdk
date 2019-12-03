@@ -92,3 +92,8 @@ $ cd cbclient
 ```
 
 For a longer answer, read [TESTING.md](./TESTING.md).
+
+## Updating Dependencies
+
+If you want to make any changes to the dependencies, run `scripts/update-deps.sh`.
+This will read `go.mod` and make any necessary changes to `go.sum`.
