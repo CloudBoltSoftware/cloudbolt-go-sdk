@@ -87,7 +87,8 @@ func main() {
 The quick answer to "how do I test this" is:
 
 ```sh
-go test ./cbclient/
+$ cd cbclient
+[cbclient]$ go test
 ```
 
-For a longer answer, read [TESTING.md].
+For a longer answer, read [TESTING.md](./TESTING.md).

@@ -22,21 +22,22 @@ To run the tests, make sure you have `go>=0.13.0` installed and ready.
 
 After that, run the following in your shell:
 
-```sh
-go test ./cbclient/
+```sh 
+$ cd cbclient
+[cbclient]$ go test
 ```
 
 Success looks like this:
 
 ```sh
-$ go test ./cbclient/
+[cbclient]$ go test
 ok      github.com/cloudboltsoftware/cloudbolt-go-sdk/cbclient/cbclient 0.434s
 ```
 
 and a failure looks like this:
 
 ```sh
-$ go test ./cbclient/
+[cbclient]$ go test
 --- FAIL: TestSomeFunction (0.00s)
     api_client_test.go:547:
         Expected
