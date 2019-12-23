@@ -310,14 +310,14 @@ func (c *CloudBoltClient) Authenticate() (int, error) {
 	}
 
 	// Put the username+password into a bytes buffer for the API request
-	reqJSONBytes := bytes.NewBuffer(reqJSON)
+	reqJSONBuffer := bytes.NewBuffer(reqJSON)
 
 	// Craft the URL api-token request endpoint based on the API version
 	apiurl := c.baseURL
 	apiurl.Path = c.apiEndpoint("api-token-auth")
 
 	// Make the POST request to get the API token
-	req, err := http.NewRequest("POST", apiurl.String(), reqJSONBytes)
+	req, err := http.NewRequest("POST", apiurl.String(), reqJSONBuffer)
 	if err != nil {
 		return -1, err
 	}
@@ -361,12 +361,7 @@ func (c *CloudBoltClient) GetCloudBoltObject(objPath string, objName string) (*C
 
 	// log.Printf("[!!] apiurl in GetCloudBoltObject: %+v (%+v)", apiurl.String(), apiurl)
 
-	req, err := http.NewRequest("GET", apiurl.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	resp, err := c.makeRequest(req)
+	resp, err := c.makeRequest("GET", apiurl.String(), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -420,12 +415,7 @@ func (c *CloudBoltClient) GetGroup(groupPath string) (*CloudBoltObject, error) {
 
 	// log.Printf("[!!] apiurl in GetGroup: %+v (%+v)", apiurl.String(), apiurl)
 
-	req, err := http.NewRequest("GET", apiurl.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	resp, err := c.makeRequest(req)
+	resp, err := c.makeRequest("GET", apiurl.String(), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -512,14 +502,7 @@ func (c *CloudBoltClient) DeployBlueprint(grpPath string, bpPath string, resourc
 
 	// log.Printf("[!!] apiurl in DeployBlueprint: %+v (%+v)", apiurl.String(), apiurl)
 
-	reqBody := bytes.NewBuffer(reqJSON)
-
-	req, err := http.NewRequest("POST", apiurl.String(), reqBody)
-	if err != nil {
-		return nil, err
-	}
-
-	resp, err := c.makeRequest(req)
+	resp, err := c.makeRequest("POST", apiurl.String(), reqJSON)
 	if err != nil {
 		return nil, err
 	}
@@ -553,12 +536,7 @@ func (c *CloudBoltClient) GetOrder(orderID string) (*CloudBoltOrder, error) {
 
 	// log.Printf("[!!] apiurl in GetOrder: %+v (%+v)", apiurl.String(), apiurl)
 
-	req, err := http.NewRequest("GET", apiurl.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	resp, err := c.makeRequest(req)
+	resp, err := c.makeRequest("GET", apiurl.String(), nil)
 	if err != nil {
 		log.Fatalln(err)
 
@@ -580,12 +558,7 @@ func (c *CloudBoltClient) GetJob(jobPath string) (*CloudBoltJob, error) {
 
 	// log.Printf("[!!] GetJob: %+v (%+v)", apiurl.String(), apiurl)
 
-	req, err := http.NewRequest("GET", apiurl.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	resp, err := c.makeRequest(req)
+	resp, err := c.makeRequest("GET", apiurl.String(), nil)
 	if err != nil {
 		log.Fatalln(err)
 
@@ -607,12 +580,7 @@ func (c *CloudBoltClient) GetResource(resourcePath string) (*CloudBoltResource, 
 
 	// log.Printf("[!!] apiurl in GetResource: %+v (%+v)", apiurl.String(), apiurl)
 
-	req, err := http.NewRequest("GET", apiurl.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	resp, err := c.makeRequest(req)
+	resp, err := c.makeRequest("GET", apiurl.String(), nil)
 	if err != nil {
 		log.Fatalln(err)
 
@@ -634,12 +602,7 @@ func (c *CloudBoltClient) GetServer(serverPath string) (*CloudBoltServer, error)
 
 	// log.Printf("[!!] apiurl in GetServer: %+v (%+v)", apiurl.String(), apiurl)
 
-	req, err := http.NewRequest("GET", apiurl.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	resp, err := c.makeRequest(req)
+	resp, err := c.makeRequest("GET", apiurl.String(), nil)
 	if err != nil {
 		log.Fatalln(err)
 		return nil, err
@@ -660,12 +623,7 @@ func (c *CloudBoltClient) SubmitAction(actionPath string) (*CloudBoltActionResul
 
 	// log.Printf("[!!] apiurl in SubmitAction: %+v (%+v)", apiurl.String(), apiurl)
 
-	req, err := http.NewRequest("POST", apiurl.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	resp, err := c.makeRequest(req)
+	resp, err := c.makeRequest("POST", apiurl.String(), nil)
 	if err != nil {
 		log.Fatalln(err)
 		return nil, err
@@ -714,12 +672,7 @@ func (c *CloudBoltClient) DecomOrder(grpPath string, envPath string, servers []s
 
 	// log.Printf("[!!] apiurl in DecomOrder: %+v (%+v)", apiurl.String(), apiurl)
 
-	req, err := http.NewRequest("POST", apiurl.String(), bytes.NewBuffer(reqJSON))
-	if err != nil {
-		return nil, err
-	}
-
-	resp, err := c.makeRequest(req)
+	resp, err := c.makeRequest("POST", apiurl.String(), reqJSON)
 	if err != nil {
 		return nil, err
 	}
@@ -763,7 +716,7 @@ func (c *CloudBoltClient) apiEndpoint(paths ...string) string {
 //
 // if the first attempt at the request returns a 401 or 403 HTTP Status Code
 // it Attempts exactly one call to CloudBoltClient.Authenticate() and resets the request token.
-func (c *CloudBoltClient) authWrappedRequest(req *http.Request) (*http.Response, error) {
+func (c *CloudBoltClient) authWrappedRequest(req *http.Request, backup *http.Request) (*http.Response, error) {
 	// Add the Auth token to the request
 	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.token))
 
@@ -773,30 +726,21 @@ func (c *CloudBoltClient) authWrappedRequest(req *http.Request) (*http.Response,
 		return nil, err
 	}
 
-	// log.Printf("[!!] Auth Wrapped Request Response: %+v", resp)
-
 	// (Bluntly) Handles common HTTP "auth" related Status Codes
 	if resp.StatusCode >= 400 {
-		// Re-authenticate with the API
 		_, err := c.Authenticate()
 		if err != nil {
 			return nil, err
 		}
 
-		// Re-add the auth token which should have updated
-		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.token))
+		backup.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.token))
 
-		// Make the request again
-		// We assume we have valid Auth credentials
-		resp, err := c.httpClient.Do(req)
+		resp, err := c.httpClient.Do(backup)
 		if err != nil {
 			return nil, err
 		}
 
-		// Return the post-re-auth response
-		// This may still get a bad HTTP error
 		return resp, nil
-
 	}
 
 	// If we didn't get one of the those 50x/40x Status Codes,
@@ -805,16 +749,51 @@ func (c *CloudBoltClient) authWrappedRequest(req *http.Request) (*http.Response,
 	return resp, nil
 }
 
-// makeRequest wrapps most HTTP requests by adding:
-// - Set Content Type to JSON
-// - Set Accept to JSON
-// - Calling authWrappedRequest
-func (c *CloudBoltClient) makeRequest(req *http.Request) (*http.Response, error) {
-	// Sending and Accepting JSON
+// makeRequest wraps what http.NewRequest would do:
+// Creates an HTTP request
+// Creates a duplicate if the body is not nil
+// Calls authWrappedRequest with both requests
+func (c *CloudBoltClient) makeRequest(method string, url string, body []byte) (*http.Response, error) {
+	// Construct the initial request
+	req, err := constructRequest(method, url, body)
+	if err != nil {
+		return nil, err
+	}
+
+	// Default to assigning reqBackup to the current request
+	reqBackup := req
+
+	// If the Body is not nil, we cannot reuse the request object
+	// So we generate a new request object from scratch
+	if body != nil {
+		reqBackup, err = constructRequest(method, url, body)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return c.authWrappedRequest(req, reqBackup)
+}
+
+// constructRequest generates a CloudBolt API HTTP request object.
+// - Reads the body into a buffer.
+// - Calls http.NewRequest
+// - Sets ContentType and Accept to JSON
+func constructRequest(method string, url string, body []byte) (*http.Request, error) {
+	// Load the body into a buffer
+	reqBody := bytes.NewBuffer(body)
+
+	// Generate a new HTTP Request
+	req, err := http.NewRequest(method, url, reqBody)
+	if err != nil {
+		return nil, err
+	}
+
+	// Set JSON headers
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
 
-	return c.authWrappedRequest(req)
+	return req, nil
 }
 
 // verifyGroup checks that all a given group is the one we intended to fetch.
@@ -831,12 +810,7 @@ func (c *CloudBoltClient) verifyGroup(groupPath string, parentPath string) (bool
 	apiurl := c.baseURL
 	apiurl.Path = groupPath
 
-	req, err := http.NewRequest("GET", apiurl.String(), nil)
-	if err != nil {
-		return false, err
-	}
-
-	resp, err := c.makeRequest(req)
+	resp, err := c.makeRequest("GET", apiurl.String(), nil)
 	if err != nil {
 		return false, err
 	}

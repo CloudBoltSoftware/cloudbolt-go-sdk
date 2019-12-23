@@ -53,6 +53,12 @@ func copyRequest(r *http.Request) *http.Request {
 // The server is used to create a CloudBoltClient object.
 // The requests can be indexed and inspected to verify the API client is making the correct calls.
 // Requests usage looks like: Expect((*requests)[0].URL.Path).To(Equal("/path/to/a-resource/"))
+//
+// There is a known issue with this mockServer that it doesn't correctly empty the body of a request.
+// This means that when, for example, the same http.Request object is used multiple times, the request.Body is not depleted.
+// This differs with real behavior in that request bodies are depleted upon being read and are empty, so POST Request objects cannot be re-used.
+// To preverse requests for testing introspection we can't easily deplete request object Bodies.
+// This is probably solvable but I haven't had the time to look into it.
 func mockServer(responseFunc fn) (*httptest.Server, *mockRequests) {
 	var requests mockRequests
 
@@ -62,8 +68,6 @@ func mockServer(responseFunc fn) (*httptest.Server, *mockRequests) {
 
 		// Get the body (string) and HTTP status code for this request
 		body, status := responseFunc(len(requests) - 1)
-
-		// fmt.Printf("Mock server responding with body status %d\nstatus: %s\n", status, body)
 
 		// Write the response
 		w.Header().Add("Content-Type", "application/json")
@@ -224,11 +228,10 @@ func TestAuthWrappedRequest(t *testing.T) {
 	apiurl := client.baseURL
 	// Use a dummy path
 	apiurl.Path = "/foo/"
-	req, err := http.NewRequest("GET", apiurl.String(), nil)
-	Expect(err).NotTo(HaveOccurred())
+	reqBody := []byte(`{"bar": "foo"}`)
 
-	// Call authWrappedRequest directly
-	resp, err := client.authWrappedRequest(req)
+	// Call authWrappedRequest implicitly via makeRequest
+	resp, err := client.makeRequest("POST", apiurl.String(), reqBody)
 	Expect(err).NotTo(HaveOccurred())
 	Expect(resp).NotTo(BeNil())
 
@@ -250,8 +253,8 @@ func TestAuthWrappedRequest(t *testing.T) {
 	Expect((*requests)[2].Header["Authorization"]).To(Equal([]string{"Bearer Testing Token"}))
 
 	// Check that the final response body was as expected
-	body := bodyToString(resp.Body)
-	Expect(body).To(MatchJSON(`{"foo": "bar"}`))
+	respBody := bodyToString(resp.Body)
+	Expect(respBody).To(MatchJSON(`{"foo": "bar"}`))
 }
 
 // This validates that when the server responds with a "good" http status,
@@ -280,9 +283,12 @@ func TestAuthWrappedRequestWithValidToken(t *testing.T) {
 	// Create the HTTP request object
 	req, err := http.NewRequest("GET", apiurl.String(), nil)
 	Expect(err).NotTo(HaveOccurred())
+	// Create second HTTP request object if the first fails
+	reqBackup, err := http.NewRequest("GET", apiurl.String(), nil)
+	Expect(err).NotTo(HaveOccurred())
 
 	// call the request auth wrapper
-	resp, err := client.authWrappedRequest(req)
+	resp, err := client.authWrappedRequest(req, reqBackup)
 	Expect(err).NotTo(HaveOccurred())
 	Expect(resp).NotTo(BeNil())
 
