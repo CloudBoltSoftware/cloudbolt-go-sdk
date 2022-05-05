@@ -43,8 +43,6 @@ func (c *CloudBoltClient) GetJob(jobPath string) (*CloudBoltJob, error) {
 	apiurl := c.baseURL
 	apiurl.Path = jobPath
 
-	// log.Printf("[!!] GetJob: %+v (%+v)", apiurl.String(), apiurl)
-
 	resp, err := c.makeRequest("GET", apiurl.String(), nil)
 	if err != nil {
 		log.Fatalln(err)

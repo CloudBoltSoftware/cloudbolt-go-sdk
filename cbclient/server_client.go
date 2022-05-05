@@ -58,8 +58,6 @@ func (c *CloudBoltClient) GetServer(serverPath string) (*CloudBoltServer, error)
 	apiurl := c.baseURL
 	apiurl.Path = serverPath
 
-	// log.Printf("[!!] apiurl in GetServer: %+v (%+v)", apiurl.String(), apiurl)
-
 	resp, err := c.makeRequest("GET", apiurl.String(), nil)
 	if err != nil {
 		log.Fatalln(err)

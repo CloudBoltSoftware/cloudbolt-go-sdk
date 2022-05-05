@@ -44,8 +44,6 @@ func (c *CloudBoltClient) GetGroup(groupPath string) (*CloudBoltGroup, error) {
 	apiurl.Path = c.apiEndpoint("groups")
 	apiurl.RawQuery = fmt.Sprintf(filterByName, url.QueryEscape(group))
 
-	// log.Printf("[!!] apiurl in GetGroup: %+v (%+v)", apiurl.String(), apiurl)
-
 	resp, err := c.makeRequest("GET", apiurl.String(), nil)
 	if err != nil {
 		return nil, err
@@ -56,7 +54,6 @@ func (c *CloudBoltClient) GetGroup(groupPath string) (*CloudBoltGroup, error) {
 	json.NewDecoder(resp.Body).Decode(&res)
 
 	for _, v := range res.Embedded.Groups {
-		// log.Printf("Group is %+v\n", v)
 		groupFound, err = c.verifyGroup(v.Links.Self.Href, parentPath)
 
 		if groupFound {
@@ -89,7 +86,6 @@ func (c *CloudBoltClient) GetGroupById(id string) (*CloudBoltGroup, error) {
 // If a group has no parents, "parentPath" should be empty.
 // If a group has parents, it should be of the format "root-level-parent/sub-parent/.../closest-parent"
 func (c *CloudBoltClient) verifyGroup(groupPath string, parentPath string) (bool, error) {
-	// log.Printf("Verifying group %+v with parent(s) %+v\n", groupPath, parentPath)
 	var parent string
 	var nextParentPath string
 
@@ -112,28 +108,20 @@ func (c *CloudBoltClient) verifyGroup(groupPath string, parentPath string) (bool
 
 	nextIndex := strings.LastIndex(parentPath, "/")
 
-	// log.Printf("[!!] parentPath: %+v", parentPath)
-	// log.Printf("[!!] strings.LastIndex(parentPath, '/')+1: %+v", nextIndex+1)
 	if nextIndex >= 0 {
 		parent = parentPath[nextIndex+1:]
 		nextParentPath = parentPath[:nextIndex]
-		// log.Printf("[!!] NextIndex >= 0 so parent: %+v, nextParentPath %+v", parent, nextParentPath)
 	} else {
 		parent = parentPath
-		// log.Printf("[!!] NextIndex < 0 so parent: %+v", parent)
 	}
 
 	if group.Parent.Title != parent {
-		// log.Printf("[!!] group.Links.Parent.Title '%+v' !=? parent '%+v'\nReturning False\n", group.Links.Parent.Title, parent)
 		return false, nil
 	}
 
-	// log.Printf("[!!] nextParentPath: %+v", nextParentPath)
 	if nextParentPath != "" {
-		// log.Printf("[!!] NextParentPath is not empty, making recursive call in verifyGroup\n")
 		return c.verifyGroup(group.Parent.Href, nextParentPath)
 	}
 
-	// log.Printf("[!!] Group verified, returning true\n")
 	return true, nil
 }

@@ -31,8 +31,6 @@ func (c *CloudBoltClient) GetEnvironment(name string) (*CloudBoltReferenceFields
 	json.NewDecoder(resp.Body).Decode(&res)
 
 	// TODO: Sanity check the decoded object
-
-	// log.Printf("[!!] CloudBoltResult response %+v", res) // HERE IS WHERE THE PANIC IS!!!
 	if len(res.Embedded.Environments) == 0 {
 		return nil, fmt.Errorf(
 			"Could not find enviornment with name %s. Does the user have permission to view this?",
