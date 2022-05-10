@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/url"
 )
 
@@ -34,8 +33,6 @@ func (c *CloudBoltClient) GetBlueprint(name string) (*CloudBoltReferenceFields, 
 	json.NewDecoder(resp.Body).Decode(&res)
 
 	// TODO: Sanity check the decoded object
-
-	// log.Printf("[!!] CloudBoltResult response %+v", res) // HERE IS WHERE THE PANIC IS!!!
 	if len(res.Embedded.Blueprints) == 0 {
 		return nil, fmt.Errorf(
 			"Could not find blueprint with name %s. Does the user have permission to view this?",
@@ -100,9 +97,6 @@ func (c *CloudBoltClient) DeployBlueprint(grpPath string, blueprintID string, re
 
 	apiurl := c.baseURL
 	apiurl.Path = c.apiEndpoint("blueprints", blueprintID, "deploy")
-	log.Printf("%s", apiurl.String())
-
-	// log.Printf("[!!] apiurl in DeployBlueprint: %+v (%+v)", apiurl.String(), apiurl)
 
 	resp, err := c.makeRequest("POST", apiurl.String(), reqJSON)
 	if err != nil {

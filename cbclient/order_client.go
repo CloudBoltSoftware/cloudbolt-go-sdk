@@ -39,8 +39,6 @@ func (c *CloudBoltClient) GetOrder(orderID string) (*CloudBoltOrder, error) {
 	apiurl := c.baseURL
 	apiurl.Path = c.apiEndpoint("orders", orderID)
 
-	// log.Printf("[!!] apiurl in GetOrder: %+v (%+v)", apiurl.String(), apiurl)
-
 	resp, err := c.makeRequest("GET", apiurl.String(), nil)
 	if err != nil {
 		log.Fatalln(err)
