@@ -52,6 +52,12 @@ func (c *CloudBoltClient) GetResourceHandlerById(id string) (*CloudBoltReference
 		return nil, err
 	}
 	// TODO: HTTP Response handling
+	if resp.StatusCode == 404 {
+		return nil, fmt.Errorf(
+			"Could not find resource handler with ID %s. Does the user have permission to view this?",
+			id,
+		)
+	}
 
 	// We Decode the data because we already have an io.Reader on hand
 	var res CloudBoltReferenceFields
