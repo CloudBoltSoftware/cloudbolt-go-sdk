@@ -17,7 +17,7 @@ type CloudBoltOSBuildResult struct {
 //
 func (c *CloudBoltClient) GetOSBuild(name string) (*CloudBoltReferenceFields, error) {
 	apiurl := c.baseURL
-	apiurl.Path = c.apiEndpoint("osBuilds")
+	apiurl.Path = c.apiEndpoint("cmp", "osBuilds")
 	apiurl.RawQuery = fmt.Sprintf(filterByName, url.QueryEscape(name))
 
 	resp, err := c.makeRequest("GET", apiurl.String(), nil)
@@ -43,6 +43,7 @@ func (c *CloudBoltClient) GetOSBuild(name string) (*CloudBoltReferenceFields, er
 func (c *CloudBoltClient) GetOSBuildById(id string) (*CloudBoltReferenceFields, error) {
 	apiurl := c.baseURL
 	apiurl.Path = c.apiEndpoint(
+		"cmp",
 		"osBuilds",
 		id,
 	)

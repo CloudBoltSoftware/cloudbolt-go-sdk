@@ -206,9 +206,9 @@ func TestAPIEndpoint(t *testing.T) {
 
 	// When nothing is passed, this is the the base API path
 	basePath := client.apiEndpoint()
-	Expect(basePath).To(Equal("/api/v3/cmp/"))
+	Expect(basePath).To(Equal("/api/v3/"))
 
 	// When many things are passed it formats them as a path in order
-	longEndpoint := client.apiEndpoint("a", "b", "c")
+	longEndpoint := client.apiEndpoint("cmp", "a", "b", "c")
 	Expect(longEndpoint).To(Equal("/api/v3/cmp/a/b/c/"))
 }

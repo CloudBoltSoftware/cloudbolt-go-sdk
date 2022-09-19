@@ -148,7 +148,7 @@ func (c *CloudBoltClient) Authenticate() (int, error) {
 
 	// Craft the URL api-token request endpoint based on the API version
 	apiurl := c.baseURL
-	apiurl.Path = c.apiEndpoint("apiToken")
+	apiurl.Path = c.apiEndpoint("cmp", "apiToken")
 
 	// Make the POST request to get the API token
 	req, err := http.NewRequest("POST", apiurl.String(), reqJSONBuffer)
@@ -192,7 +192,6 @@ func (c *CloudBoltClient) apiEndpoint(paths ...string) string {
 	basePathSlice := []string{
 		"api",
 		"v3",
-		"cmp",
 	}
 
 	// Concatenate basePathSlice with the user provided paths
@@ -216,6 +215,15 @@ func (c *CloudBoltClient) apiEndpoint(paths ...string) string {
 // if the first attempt at the request returns a 401 or 403 HTTP Status Code
 // it Attempts exactly one call to CloudBoltClient.Authenticate() and resets the request token.
 func (c *CloudBoltClient) authWrappedRequest(req *http.Request, backup *http.Request) (*http.Response, error) {
+	// if c.token == "" {
+	// 	log.Printf("Authenticating %+v", req)
+	// 	time.Sleep(10 * time.Second)
+	// 	_, err := c.Authenticate()
+	// 	if err != nil {
+	// 		return nil, err
+	// 	}
+	// }
+
 	// Add the Auth token to the request
 	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.token))
 
@@ -293,4 +301,34 @@ func constructRequest(method string, url string, body []byte) (*http.Request, er
 	req.Header.Set("Accept", "application/json")
 
 	return req, nil
+}
+
+func checkHttpStatus(resp *http.Response) error {
+	switch {
+	case resp.StatusCode >= 500:
+		buf := new(bytes.Buffer)
+		buf.ReadFrom(resp.Body)
+		respBody := buf.String()
+		return fmt.Errorf("received a server error: %s", respBody)
+	case resp.StatusCode >= 400:
+		buf := new(bytes.Buffer)
+		buf.ReadFrom(resp.Body)
+		respBody := buf.String()
+		return fmt.Errorf("received an HTTP client error: %s", respBody)
+	}
+
+	return nil
+}
+
+func checkOneFuseResponse(resp *http.Response) (*OneFuseJobStatus, error) {
+	err := checkHttpStatus(resp)
+	if err != nil {
+		return nil, err
+	}
+
+	// We Decode the data because we already have an io.Reader on hand
+	var jobStatus OneFuseJobStatus
+	json.NewDecoder(resp.Body).Decode(&jobStatus)
+
+	return &jobStatus, nil
 }

@@ -2,11 +2,11 @@ module github.com/cloudboltsoftware/cloudbolt-go-sdk/cbclient
 
 go 1.18
 
-require github.com/onsi/gomega v1.8.1
+require github.com/onsi/gomega v1.20.2
 
 require (
-	golang.org/x/net v0.0.0-20180906233101-161cd47e91fd // indirect
-	golang.org/x/text v0.3.0 // indirect
-	golang.org/x/xerrors v0.0.0-20190717185122-a985d3407aa7 // indirect
-	gopkg.in/yaml.v2 v2.2.4 // indirect
+	github.com/google/go-cmp v0.5.8 // indirect
+	golang.org/x/net v0.0.0-20220722155237-a158d28d115b // indirect
+	golang.org/x/text v0.3.7 // indirect
+	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

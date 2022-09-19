@@ -27,7 +27,7 @@ func TestVerifyGroup(t *testing.T) {
 	Expect(err).NotTo(HaveOccurred())
 
 	// We expect that to find this group we needed to make 4 API calls
-	// 1+2. Fail to get resource, get a token
+	// 1+2. Fail to get group, get a token
 	// 3. make request to /api/v2/groups/GRP-an0thrgrp/ to verify `the subgroup` is this group's parent
 	// 4. make request to /api/v2/groups/... to verify `the group` is `the subgroup`'s parent.
 	Expect(len(*requests)).To(Equal(4))
@@ -53,7 +53,7 @@ func TestGetGroupById(t *testing.T) {
 	Expect(err).NotTo(HaveOccurred())
 
 	// This should have made three requests:
-	// 1+2. Fail to get order, get a token
+	// 1+2. Fail to get group, get a token
 	// 3. Successfully getting the order
 	Expect(len(*requests)).To(Equal(3))
 

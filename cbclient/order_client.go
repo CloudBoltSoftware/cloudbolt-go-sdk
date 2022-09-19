@@ -37,7 +37,7 @@ type CloudBoltOrder struct {
 // - Order ID (orderID) e.g., "123"; formatted into a string like "/api/v2/orders/123"
 func (c *CloudBoltClient) GetOrder(orderID string) (*CloudBoltOrder, error) {
 	apiurl := c.baseURL
-	apiurl.Path = c.apiEndpoint("orders", orderID)
+	apiurl.Path = c.apiEndpoint("cmp", "orders", orderID)
 
 	resp, err := c.makeRequest("GET", apiurl.String(), nil)
 	if err != nil {
