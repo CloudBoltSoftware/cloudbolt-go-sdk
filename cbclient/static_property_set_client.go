@@ -48,5 +48,11 @@ func (c *CloudBoltClient) GetStaticPropertySet(name string) (*StaticPropertySet,
 		)
 	}
 
+	raw, err := json.Marshal(res.Embedded.PropertySets[0].Properties)
+	if err != nil {
+		return nil, err
+	}
+	res.Embedded.PropertySets[0].Raw = string(raw)
+
 	return &res.Embedded.PropertySets[0], nil
 }
