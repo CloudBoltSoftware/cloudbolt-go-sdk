@@ -144,8 +144,6 @@ func (c *CloudBoltClient) Authenticate() (int, error) {
 	// Put the username+password into a bytes buffer for the API request
 	reqJSONBuffer := bytes.NewBuffer(reqJSON)
 
-	fmt.Printf("%+v", reqJSONBuffer)
-
 	// Craft the URL api-token request endpoint based on the API version
 	apiurl := c.baseURL
 	apiurl.Path = c.apiEndpoint("cmp", "apiToken")
