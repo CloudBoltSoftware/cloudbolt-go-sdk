@@ -26,7 +26,7 @@ func TestGetEnvironment(t *testing.T) {
 	Expect(err).NotTo(HaveOccurred())
 
 	// This should have made three requests:
-	// 1+2. Fail to get order, get a token
+	// 1+2. Fail to get environment, get a token
 	// 3. Successfully getting the order
 	Expect(len(*requests)).To(Equal(3))
 
@@ -60,7 +60,7 @@ func TestGetEnvironmentById(t *testing.T) {
 	Expect(err).NotTo(HaveOccurred())
 
 	// This should have made three requests:
-	// 1+2. Fail to get order, get a token
+	// 1+2. Fail to get environment, get a token
 	// 3. Successfully getting the order
 	Expect(len(*requests)).To(Equal(3))
 

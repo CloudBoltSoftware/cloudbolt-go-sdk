@@ -41,7 +41,7 @@ func (c *CloudBoltClient) GetGroup(groupPath string) (*CloudBoltGroup, error) {
 	}
 
 	apiurl := c.baseURL
-	apiurl.Path = c.apiEndpoint("groups")
+	apiurl.Path = c.apiEndpoint("cmp", "groups")
 	apiurl.RawQuery = fmt.Sprintf(filterByName, url.QueryEscape(group))
 
 	resp, err := c.makeRequest("GET", apiurl.String(), nil)
@@ -66,7 +66,7 @@ func (c *CloudBoltClient) GetGroup(groupPath string) (*CloudBoltGroup, error) {
 
 func (c *CloudBoltClient) GetGroupById(id string) (*CloudBoltGroup, error) {
 	apiurl := c.baseURL
-	apiurl.Path = c.apiEndpoint("groups", id)
+	apiurl.Path = c.apiEndpoint("cmp", "groups", id)
 
 	resp, err := c.makeRequest("GET", apiurl.String(), nil)
 	if err != nil {

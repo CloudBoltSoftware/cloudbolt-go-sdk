@@ -73,7 +73,7 @@ func (c *CloudBoltClient) GetServer(serverPath string) (*CloudBoltServer, error)
 
 func (c *CloudBoltClient) GetServerById(id string) (*CloudBoltServer, error) {
 	apiurl := c.baseURL
-	apiurl.Path = c.apiEndpoint("servers", id)
+	apiurl.Path = c.apiEndpoint("cmp", "servers", id)
 
 	resp, err := c.makeRequest("GET", apiurl.String(), nil)
 	if err != nil {
@@ -89,6 +89,7 @@ func (c *CloudBoltClient) GetServerById(id string) (*CloudBoltServer, error) {
 func (c *CloudBoltClient) DecomServer(serverId string) (*CloudBoltDecomServerResult, error) {
 	apiurl := c.baseURL
 	apiurl.Path = c.apiEndpoint(
+		"cmp",
 		"servers",
 		serverId,
 		"decommission",

@@ -17,7 +17,7 @@ type CloudBoltEnvironmentResult struct {
 //
 func (c *CloudBoltClient) GetEnvironment(name string) (*CloudBoltReferenceFields, error) {
 	apiurl := c.baseURL
-	apiurl.Path = c.apiEndpoint("environments")
+	apiurl.Path = c.apiEndpoint("cmp", "environments")
 	apiurl.RawQuery = fmt.Sprintf(filterByName, url.QueryEscape(name))
 
 	resp, err := c.makeRequest("GET", apiurl.String(), nil)
@@ -42,7 +42,7 @@ func (c *CloudBoltClient) GetEnvironment(name string) (*CloudBoltReferenceFields
 
 func (c *CloudBoltClient) GetEnvironmentById(id string) (*CloudBoltReferenceFields, error) {
 	apiurl := c.baseURL
-	apiurl.Path = c.apiEndpoint("environments", id)
+	apiurl.Path = c.apiEndpoint("cmp", "environments", id)
 
 	resp, err := c.makeRequest("GET", apiurl.String(), nil)
 	if err != nil {

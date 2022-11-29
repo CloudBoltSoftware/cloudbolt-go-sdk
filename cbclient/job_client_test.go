@@ -76,3 +76,54 @@ func TestGetJob(t *testing.T) {
 	Expect(job.Label).To(Equal(""))
 	Expect(job.ExecutionState).To(Equal(""))
 }
+
+func TestGetJobStatus(t *testing.T) {
+	// Register the test with gomega
+	RegisterTestingT(t)
+
+	// Setup mock server with scripted responses
+	// Setup requests buffer
+	server, requests := mockServer(responsesForGetJobStatus)
+	Expect(server).NotTo(BeNil())
+	Expect(requests).NotTo(BeNil())
+
+	// Setup CloudBolt Client
+	client := getClient(server)
+	Expect(client).NotTo(BeNil())
+
+	// Define a jobPath parameter value
+	jobStatusPath := "/api/v3/onefuse/jobStatus/3280/"
+
+	// Get the CloudBolt Job object
+	// Expect no errors to occur
+	jobStatus, err := client.GetJobStatus(jobStatusPath)
+	Expect(jobStatus).NotTo(BeNil())
+	Expect(err).NotTo(HaveOccurred())
+
+	// This should have made three requests:
+	// 1+2. Fail to get job, get a token
+	// 3. Successfully getting the job
+	Expect(len(*requests)).To(Equal(3))
+
+	// The last request is the one we care about
+	Expect((*requests)[2].URL.Path).To(Equal("/api/v3/onefuse/jobStatus/3280/"))
+	verifyJobStatus(jobStatus)
+}
+
+func verifyJobStatus(jobStatus *OneFuseJobStatus) {
+	Expect(jobStatus.Links.Self.Href).To(Equal("/api/v3/onefuse/jobStatus/3280/"))
+	Expect(jobStatus.Links.Self.Title).To(Equal("Job Metadata Record id 3280"))
+	Expect(jobStatus.Links.JobMetadata.Href).To(Equal("/api/v3/onefuse/jobMetadata/3280/"))
+	Expect(jobStatus.Links.JobMetadata.Title).To(Equal("Job Metadata Record id 3280"))
+	Expect(jobStatus.Links.ManagedObject.Href).To(Equal("/api/v3/onefuse/moduleManagedObjects/15/"))
+	Expect(jobStatus.Links.ManagedObject.Title).To(Equal("My Awesome Subject"))
+	Expect(jobStatus.Links.Policy.Href).To(Equal("/api/v3/onefuse/modulePolicies/1/"))
+	Expect(jobStatus.Links.Policy.Title).To(Equal("1F_Notification"))
+	Expect(jobStatus.Links.Workspace.Href).To(Equal("/api/v3/onefuse/workspaces/2/"))
+	Expect(jobStatus.Links.Workspace.Title).To(Equal("Default"))
+	Expect(jobStatus.ID).To(Equal(3280))
+	Expect(jobStatus.JobStateDescription).To(Equal("Successful"))
+	Expect(jobStatus.JobState).To(Equal("Successful"))
+	Expect(jobStatus.JobTrackingID).To(Equal("3474c59f-6ca0-4d99-82ea-e1b98fca71c6"))
+	Expect(jobStatus.JobType).To(Equal("Provision Email Notification"))
+}

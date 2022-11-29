@@ -18,7 +18,7 @@ type CloudBoltBlueprintResult struct {
 //
 func (c *CloudBoltClient) GetBlueprint(name string) (*CloudBoltReferenceFields, error) {
 	apiurl := c.baseURL
-	apiurl.Path = c.apiEndpoint("blueprints")
+	apiurl.Path = c.apiEndpoint("cmp", "blueprints")
 	apiurl.RawQuery = fmt.Sprintf(filterByName, url.QueryEscape(name))
 
 	resp, err := c.makeRequest("GET", apiurl.String(), nil)
@@ -44,7 +44,7 @@ func (c *CloudBoltClient) GetBlueprint(name string) (*CloudBoltReferenceFields, 
 
 func (c *CloudBoltClient) GetBlueprintById(id string) (*CloudBoltReferenceFields, error) {
 	apiurl := c.baseURL
-	apiurl.Path = c.apiEndpoint("blueprints", id)
+	apiurl.Path = c.apiEndpoint("cmp", "blueprints", id)
 
 	resp, err := c.makeRequest("GET", apiurl.String(), nil)
 	if err != nil {
@@ -96,7 +96,7 @@ func (c *CloudBoltClient) DeployBlueprint(grpPath string, blueprintID string, re
 	}
 
 	apiurl := c.baseURL
-	apiurl.Path = c.apiEndpoint("blueprints", blueprintID, "deploy")
+	apiurl.Path = c.apiEndpoint("cmp", "blueprints", blueprintID, "deploy")
 
 	resp, err := c.makeRequest("POST", apiurl.String(), reqJSON)
 	if err != nil {

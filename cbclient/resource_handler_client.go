@@ -17,7 +17,7 @@ type CloudBoltResourceHandlerResult struct {
 //
 func (c *CloudBoltClient) GetResourceHandler(name string) (*CloudBoltReferenceFields, error) {
 	apiurl := c.baseURL
-	apiurl.Path = c.apiEndpoint("resourceHandlers")
+	apiurl.Path = c.apiEndpoint("cmp", "resourceHandlers")
 	apiurl.RawQuery = fmt.Sprintf(filterByName, url.QueryEscape(name))
 
 	resp, err := c.makeRequest("GET", apiurl.String(), nil)
@@ -43,6 +43,7 @@ func (c *CloudBoltClient) GetResourceHandler(name string) (*CloudBoltReferenceFi
 func (c *CloudBoltClient) GetResourceHandlerById(id string) (*CloudBoltReferenceFields, error) {
 	apiurl := c.baseURL
 	apiurl.Path = c.apiEndpoint(
+		"cmp",
 		"resourceHandlers",
 		id,
 	)
