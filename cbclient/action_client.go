@@ -7,12 +7,16 @@ import (
 )
 
 // SubmitAction runs an action on the CloudBolt resource or server
-func (c *CloudBoltClient) SubmitAction(actionPath string, resourcePath string) (*CloudBoltJob, error) {
+func (c *CloudBoltClient) SubmitAction(actionPath string, resourcePath string, parameters map[string]interface{}) (*CloudBoltJob, error) {
 	apiurl := c.baseURL
 	apiurl.Path = fmt.Sprintf("%srunAction/", actionPath)
 
 	reqData := map[string]interface{}{
 		"resource": resourcePath,
+	}
+
+	if parameters != nil {
+		reqData["parameters"] = parameters
 	}
 
 	reqJSON, err := json.Marshal(reqData)
