@@ -25,6 +25,21 @@ type CloudBoltResource struct {
 	Attributes []map[string]interface{} `json:"attributes"`
 }
 
+func (c *CloudBoltClient) GetResourceById(id string) (*CloudBoltResource, error) {
+	apiurl := c.baseURL
+	apiurl.Path = c.apiEndpoint("cmp", "resources", id)
+
+	resp, err := c.makeRequest("GET", apiurl.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var res CloudBoltResource
+	json.NewDecoder(resp.Body).Decode(&res)
+
+	return &res, nil
+}
+
 // GetResource fetches a Resource object from CloudBolt at the given path
 // - Resource Path (resourcePath) e.g., "/api/v2/resources/service/123/"
 func (c *CloudBoltClient) GetResource(resourcePath string) (*CloudBoltResource, error) {

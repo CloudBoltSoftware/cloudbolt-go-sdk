@@ -95,3 +95,13 @@ func bodyForGetResource(i int) string {
 		aResource,
 	)[i]
 }
+
+func responsesForGetResourceById(i int) (string, int) {
+	return bodyForGetResourceById(i), missingTokenStatusPattern(i)
+}
+
+func bodyForGetResourceById(i int) string {
+	return missingTokenBodyPattern(
+		aResource,
+	)[i]
+}
