@@ -2,7 +2,9 @@ package cbclient
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
+	"net/url"
 )
 
 // CloudBoltResource contains metadata about Resources (e.g., "Services") in CloudBolt
@@ -23,6 +25,60 @@ type CloudBoltResource struct {
 	Created    string                   `json:"created"`
 	Status     string                   `json:"status"`
 	Attributes []map[string]interface{} `json:"attributes"`
+}
+
+type CloudBoltResourceResult struct {
+	CloudBoltResult
+	Embedded struct {
+		Resources []CloudBoltResource `json:"resources"`
+	} `json:"_embedded"`
+}
+
+func (c *CloudBoltClient) GetResourceById(id string) (*CloudBoltResource, error) {
+	apiurl := c.baseURL
+	apiurl.Path = c.apiEndpoint("cmp", "resources", id)
+
+	resp, err := c.makeRequest("GET", apiurl.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var res CloudBoltResource
+	json.NewDecoder(resp.Body).Decode(&res)
+
+	return &res, nil
+}
+
+func (c *CloudBoltClient) GetResourceByName(name string) (*CloudBoltResource, error) {
+	apiurl := c.baseURL
+	apiurl.Path = c.apiEndpoint("cmp", "resources")
+	apiurl.RawQuery = fmt.Sprintf(filterByName+";status:ACTIVE", url.QueryEscape(name))
+
+	resp, err := c.makeRequest("GET", apiurl.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	// We Decode the data because we already have an io.Reader on hand
+	var res CloudBoltResourceResult
+	json.NewDecoder(resp.Body).Decode(&res)
+
+	// TODO: Sanity check the decoded object
+	if len(res.Embedded.Resources) == 0 {
+		return nil, fmt.Errorf(
+			"Could not find resorce with name %s. Does the user have permission to view this?",
+			name,
+		)
+	}
+
+	if len(res.Embedded.Resources) > 1 {
+		return nil, fmt.Errorf(
+			"More than one resource with name %s found.",
+			name,
+		)
+	}
+
+	return &res.Embedded.Resources[0], nil
 }
 
 // GetResource fetches a Resource object from CloudBolt at the given path

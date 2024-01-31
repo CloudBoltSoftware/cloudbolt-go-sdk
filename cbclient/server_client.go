@@ -2,7 +2,9 @@ package cbclient
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
+	"net/url"
 )
 
 // CloudBoltServer stores metadata about servers in CloudBolt.
@@ -45,6 +47,13 @@ type CloudBoltServer struct {
 	TechSpecificAttributes map[string]interface{}   `json:"techSpecificAttributes"`
 }
 
+type CloudBoltServerResult struct {
+	CloudBoltResult
+	Embedded struct {
+		Servers []CloudBoltServer `json:"servers"`
+	} `json:"_embedded"`
+}
+
 type CloudBoltDecomServerResult struct {
 	Links struct {
 		Self CloudBoltHALItem `json:"self"`
@@ -84,6 +93,38 @@ func (c *CloudBoltClient) GetServerById(id string) (*CloudBoltServer, error) {
 	json.NewDecoder(resp.Body).Decode(&svr)
 
 	return &svr, nil
+}
+
+func (c *CloudBoltClient) GetServerByHostname(hostname string) (*CloudBoltServer, error) {
+	apiurl := c.baseURL
+	apiurl.Path = c.apiEndpoint("cmp", "servers")
+	apiurl.RawQuery = fmt.Sprintf("filter=hostname:%s;status:ACTIVE", url.QueryEscape(hostname))
+
+	resp, err := c.makeRequest("GET", apiurl.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	// We Decode the data because we already have an io.Reader on hand
+	var res CloudBoltServerResult
+	json.NewDecoder(resp.Body).Decode(&res)
+
+	// TODO: Sanity check the decoded object
+	if len(res.Embedded.Servers) == 0 {
+		return nil, fmt.Errorf(
+			"Could not find active server with hostname %s. Does the user have permission to view this?",
+			hostname,
+		)
+	}
+
+	if len(res.Embedded.Servers) > 1 {
+		return nil, fmt.Errorf(
+			"More than one active server with hostname %s found.",
+			hostname,
+		)
+	}
+
+	return &res.Embedded.Servers[0], nil
 }
 
 func (c *CloudBoltClient) DecomServer(serverId string) (*CloudBoltDecomServerResult, error) {

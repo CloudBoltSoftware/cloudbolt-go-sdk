@@ -84,6 +84,105 @@ const aServer string = `{
     }
 }`
 
+const aServerList string = `{
+    "_links": {
+        "self": {
+            "href": "/api/v3/cmp/servers/?page=1&filter=hostname%3Amyawsinstance1",
+            "title": "List of Resources - Page 1 of 1"
+        }
+    },
+    "total": 1,
+    "count": 1,
+    "_embedded": {
+        "servers": [
+            {
+                "_links": {
+                    "self": {
+                        "href": "/api/v3/cmp/servers/SVR-yrk09wht/",
+                        "title": "myawsinstance1"
+                    }
+                },
+                "id": "SVR-yrk09wht",
+                "hostname": "myawsinstance1",
+                "ipAddress": "3.17.176.101",
+                "status": "ACTIVE",
+                "mac": "02:99:e2:0f:18:b2",
+                "powerStatus": "POWERON",
+                "dateAddedToCloudbolt": "2022-04-08 11:55:07.056038",
+                "cpuCount": 1,
+                "memorySizeGb": "0.5000",
+                "diskSizeGb": 8,
+                "notes": "",
+                "labels": [],
+                "osFamily": "Amazon Linux",
+                "rateBreakdown": {
+                    "total": "$ 4.18/month",
+                    "hardware": "$ 4.18/month",
+                    "software": "-",
+                    "extra": "-"
+                },
+                "attributes": [
+                    {
+                        "name": "delete_ebs_volumes_on_termination",
+                        "type": "BOOL",
+                        "value": true
+                    },
+                    {
+                        "name": "ebs_volume_type",
+                        "type": "STR",
+                        "value": "standard"
+                    }
+                ],
+                "credentials": {
+                    "username": "root",
+                    "password": "not set",
+                    "key": "cloudbolt-east2"
+                },
+                "disks": [
+                    {
+                        "uuid": "vol-037494719ec2192d1",
+                        "diskSize": 8,
+                        "name": "vol-037494719ec2192d1",
+                        "availabilityZone": "us-east-2a",
+                        "volumeType": "standard",
+                        "encrypted": false
+                    }
+                ],
+                "networks": [
+                    {
+                        "name": "",
+                        "network": "subnet-214ab049",
+                        "mac": "02:99:e2:0f:18:b2",
+                        "ip": "3.17.176.215",
+                        "privateIp": "172.31.13.128",
+                        "additionalIps": ""
+                    }
+                ],
+                "techSpecificAttributes": {
+                    "ec2Region": "us-east-2",
+                    "vpcId": "vpc-46c8382e",
+                    "instanceId": "i-094c9eed88b8acaa0",
+                    "instanceType": "t2.nano",
+                    "ipAddress": "3.17.176.215",
+                    "elasticIp": null,
+                    "privateIpAddress": "172.31.13.128",
+                    "publicDnsName": "ec2-3-17-176-215.us-east-2.compute.amazonaws.com",
+                    "privateDnsName": "ip-172-31-13-128.us-east-2.compute.internal",
+                    "availabilityZone": "us-east-2a",
+                    "keyName": "cloudbolt-east2",
+                    "profileArn": null,
+                    "hostId": null,
+                    "hostGroupArn": null,
+                    "securityGroupsJson": "[\"cloudbolt\"]",
+                    "tagsJson": "{\"Name\": \"myawsinstance1\"}",
+                    "type": "ec2_server_info"
+                }
+            }
+        ]
+    }
+}
+`
+
 const aDecomServerOrder string = `{
     "_links": {
         "self": {
@@ -187,6 +286,16 @@ func responsesForGetServer(i int) (string, int) {
 func bodyForGetServer(i int) string {
 	return missingTokenBodyPattern(
 		aServer,
+	)[i]
+}
+
+func responsesForGetServerByHostname(i int) (string, int) {
+	return bodyForGetServerByHostname(i), missingTokenStatusPattern(i)
+}
+
+func bodyForGetServerByHostname(i int) string {
+	return missingTokenBodyPattern(
+		aServerList,
 	)[i]
 }
 
