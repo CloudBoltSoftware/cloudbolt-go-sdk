@@ -7,7 +7,7 @@ import (
 )
 
 // SubmitAction runs an action on the CloudBolt resource or server
-func (c *CloudBoltClient) SubmitAction(actionPath string, resourcePath string, parameters map[string]interface{}) (*CloudBoltJob, error) {
+func (c *CloudBoltClient) SubmitAction(actionPath string, resourcePath string, parameters map[string]interface{}) (*CloudBoltRunActionResult, error) {
 	apiurl := c.baseURL
 	apiurl.Path = fmt.Sprintf("%srunAction/", actionPath)
 
@@ -33,7 +33,7 @@ func (c *CloudBoltClient) SubmitAction(actionPath string, resourcePath string, p
 	}
 
 	// We Decode the data because we already have an io.Reader on hand
-	var actionRes CloudBoltJob
+	var actionRes CloudBoltRunActionResult
 	json.NewDecoder(resp.Body).Decode(&actionRes)
 
 	return &actionRes, nil
