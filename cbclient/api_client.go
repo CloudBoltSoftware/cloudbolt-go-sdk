@@ -63,6 +63,17 @@ type CloudBoltReferenceFields struct {
 	ID   string `json:"id"`
 }
 
+type CloudBoltRunActionResult struct {
+	ResourceHref string `json:"resource"`
+	Results      struct {
+		Job           CloudBoltJob   `json:"job"`
+		Order         CloudBoltOrder `json:"order"`
+		Status        string         `json:"status"`
+		OutputMessage string         `json:"outputMessage"`
+		ErrorMessage  string         `json:"errorMessage"`
+	} `json:"results"`
+}
+
 // New returns an initialized CloudBoltClient object.
 // Accepts as input:
 // - HTTP Protocol (protocol) e.g., "https"
