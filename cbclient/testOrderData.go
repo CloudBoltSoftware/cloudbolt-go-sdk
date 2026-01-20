@@ -90,6 +90,18 @@ const anOrder string = `{
     ]
 }`
 
+const anOrderStatus string = `{
+    "status": "FAILURE",
+    "outputMessages": [
+        "Job 101: Output for Job 101",
+        "Job 102: Output for Job 102"
+    ],
+    "errorMessages": [
+        "Job 101: Error for Job 101",
+        "Job 102: Error for Job 102"
+    ]
+}`
+
 func responsesForGetOrder(i int) (string, int) {
 	return bodyForGetOrder(i), missingTokenStatusPattern(i)
 }
@@ -97,5 +109,15 @@ func responsesForGetOrder(i int) (string, int) {
 func bodyForGetOrder(i int) string {
 	return missingTokenBodyPattern(
 		anOrder,
+	)[i]
+}
+
+func responsesForGetOrderStatus(i int) (string, int) {
+	return bodyForGetOrderStatus(i), missingTokenStatusPattern(i)
+}
+
+func bodyForGetOrderStatus(i int) string {
+	return missingTokenBodyPattern(
+		anOrderStatus,
 	)[i]
 }
