@@ -33,6 +33,12 @@ type CloudBoltOrder struct {
 	} `json:"deploymentItems"`
 }
 
+type CloudBoltOrderStatus struct {
+	Status         string   `json:"status"`
+	OutputMessages []string `json:"outputMessages"`
+	ErrorMessages  []string `json:"errorMessages"`
+}
+
 // GetOrder fetches an Order from CloudBolt
 // - Order ID (orderID) e.g., "123"; formatted into a string like "/api/v2/orders/123"
 func (c *CloudBoltClient) GetOrder(orderID string) (*CloudBoltOrder, error) {
@@ -51,4 +57,22 @@ func (c *CloudBoltClient) GetOrder(orderID string) (*CloudBoltOrder, error) {
 	json.NewDecoder(resp.Body).Decode(&order)
 
 	return &order, nil
+}
+
+func (c *CloudBoltClient) GetOrderStatus(orderID string) (*CloudBoltOrderStatus, error) {
+	apiurl := c.baseURL
+	apiurl.Path = c.apiEndpoint("cmp", "orders", orderID, "status")
+
+	resp, err := c.makeRequest("GET", apiurl.String(), nil)
+	if err != nil {
+		log.Fatalln(err)
+
+		return nil, err
+	}
+
+	// We Decode the data because we already have an io.Reader on hand
+	var orderStatus CloudBoltOrderStatus
+	json.NewDecoder(resp.Body).Decode(&orderStatus)
+
+	return &orderStatus, nil
 }

@@ -64,3 +64,41 @@ func TestGetOrder(t *testing.T) {
 	Expect(order.DeploymentItems[0].BlueprintItemsArguments).To(Not(BeNil()))
 	Expect(order.DeploymentItems[0].ItemType).To(Equal("blueprint"))
 }
+
+
+func TestGetOrderStatus(t *testing.T) {
+	// Register the test with gomega
+	RegisterTestingT(t)
+
+	// Setup mock server with scripted responses
+	// Setup requests buffer
+	server, requests := mockServer(responsesForGetOrderStatus)
+	Expect(server).NotTo(BeNil())
+	Expect(requests).NotTo(BeNil())
+
+	// Setup CloudBolt Client
+	client := getClient(server)
+	Expect(client).NotTo(BeNil())
+
+	// Define an orderID parameter value
+	orderID := "ORD-e9v87uia"
+
+	// Get the CloudBolt Order object
+	// Expect no errors to occur
+	orderStatus, err := client.GetOrderStatus(orderID)
+	Expect(orderStatus).NotTo(BeNil())
+	Expect(err).NotTo(HaveOccurred())
+
+	// This should have made three requests:
+	// 1+2. Fail to get order, get a token
+	// 3. Successfully getting the order
+	Expect(len(*requests)).To(Equal(3))
+
+	Expect(orderStatus.Status).To(Equal("FAILURE"))
+	Expect(len(orderStatus.OutputMessages)).To(Equal(2))
+	Expect(orderStatus.OutputMessages[0]).To(Equal("Job 101: Output for Job 101"))
+	Expect(orderStatus.OutputMessages[1]).To(Equal("Job 102: Output for Job 102"))
+	Expect(len(orderStatus.ErrorMessages)).To(Equal(2))
+	Expect(orderStatus.ErrorMessages[0]).To(Equal("Job 101: Error for Job 101"))
+	Expect(orderStatus.ErrorMessages[1]).To(Equal("Job 102: Error for Job 102"))
+}
