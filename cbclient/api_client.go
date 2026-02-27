@@ -13,6 +13,7 @@ Organization note:
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -73,6 +74,8 @@ type CloudBoltRunActionResult struct {
 		ErrorMessage  string         `json:"errorMessage"`
 	} `json:"results"`
 }
+
+var ErrNotFound = errors.New("CloudBolt Object Not Found")
 
 // New returns an initialized CloudBoltClient object.
 // Accepts as input:

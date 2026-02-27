@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"net/http"
 	"net/url"
 )
 
@@ -34,6 +35,7 @@ type CloudBoltResourceResult struct {
 	} `json:"_embedded"`
 }
 
+
 func (c *CloudBoltClient) GetResourceById(id string) (*CloudBoltResource, error) {
 	apiurl := c.baseURL
 	apiurl.Path = c.apiEndpoint("cmp", "resources", id)
@@ -41,6 +43,11 @@ func (c *CloudBoltClient) GetResourceById(id string) (*CloudBoltResource, error)
 	resp, err := c.makeRequest("GET", apiurl.String(), nil)
 	if err != nil {
 		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, ErrNotFound
 	}
 
 	var res CloudBoltResource
@@ -92,8 +99,13 @@ func (c *CloudBoltClient) GetResource(resourcePath string) (*CloudBoltResource, 
 	resp, err := c.makeRequest("GET", apiurl.String(), nil)
 	if err != nil {
 		log.Fatalln(err)
-
 		return nil, err
+	}
+
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, ErrNotFound
 	}
 
 	// We Decode the data because we already have an io.Reader on hand
