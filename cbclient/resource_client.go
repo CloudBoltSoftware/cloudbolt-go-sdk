@@ -28,6 +28,17 @@ type CloudBoltResource struct {
 	Attributes []map[string]interface{} `json:"attributes"`
 }
 
+type CloudBoltResourceJobInfo []struct {
+	Title     string `json:"title"`
+	StartDate string `json:"startDate"`
+	EndDate   string `json:"endDate"`
+	Status    string `json:"status"`
+	Output    string `json:"output"`
+	Error     string `json:"error"`
+	Outputs   []map[string]interface{} `json:"outputs"`
+	ProgressMessages []string `json:"progressMessages"`
+}
+
 type CloudBoltResourceResult struct {
 	CloudBoltResult
 	Embedded struct {
@@ -110,6 +121,48 @@ func (c *CloudBoltClient) GetResource(resourcePath string) (*CloudBoltResource, 
 
 	// We Decode the data because we already have an io.Reader on hand
 	var res CloudBoltResource
+	json.NewDecoder(resp.Body).Decode(&res)
+
+	return &res, nil
+}
+
+func (c *CloudBoltClient) GetResourceJobInfoById(id string) (*CloudBoltResourceJobInfo, error) {
+	apiurl := c.baseURL
+	apiurl.Path = c.apiEndpoint("cmp", "resources", id, "jobsInfo")
+
+	resp, err := c.makeRequest("GET", apiurl.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, ErrNotFound
+	}
+
+	var res CloudBoltResourceJobInfo
+	json.NewDecoder(resp.Body).Decode(&res)
+
+	return &res, nil
+}
+
+// GetResourceJobInfo fetches job info for a Resource at the given path
+// - Job Info Path (jobInfoPath) e.g., "/api/v3/cmp/resources/123/jobsInfo/"
+func (c *CloudBoltClient) GetResourceJobInfo(jobInfoPath string) (*CloudBoltResourceJobInfo, error) {
+	apiurl := c.baseURL
+	apiurl.Path = jobInfoPath
+
+	resp, err := c.makeRequest("GET", apiurl.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, ErrNotFound
+	}
+
+	var res CloudBoltResourceJobInfo
 	json.NewDecoder(resp.Body).Decode(&res)
 
 	return &res, nil
