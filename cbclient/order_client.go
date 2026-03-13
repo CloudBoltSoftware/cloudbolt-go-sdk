@@ -37,6 +37,7 @@ type CloudBoltOrderStatus struct {
 	Status         string   `json:"status"`
 	OutputMessages []string `json:"outputMessages"`
 	ErrorMessages  []string `json:"errorMessages"`
+	ProgressMessages  []string `json:"progressMessages"`
 }
 
 // GetOrder fetches an Order from CloudBolt
