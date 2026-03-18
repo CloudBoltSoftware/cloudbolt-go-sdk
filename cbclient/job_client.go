@@ -35,6 +35,7 @@ type CloudBoltJob struct {
 	TotalTasks     int    `json:"totalTasks"`
 	Label          string `json:"label"`
 	ExecutionState string `json:"executionState"`
+	ProgressMessages  []string `json:"progressMessages"`
 }
 
 type OneFuseJobStatus struct {
@@ -60,9 +61,16 @@ type OneFuseJobStatus struct {
 
 // GetJob fetches the Job object from CloudBolt at the given path
 // - Job Path (jobPath) e.g., "/api/v2/jobs/123/"
-func (c *CloudBoltClient) GetJob(jobPath string) (*CloudBoltJob, error) {
+// - includeProgress: if true, adds ?includeProgress=true to the request
+func (c *CloudBoltClient) GetJob(jobPath string, includeProgress bool) (*CloudBoltJob, error) {
 	apiurl := c.baseURL
 	apiurl.Path = jobPath
+
+	if includeProgress {
+		q := apiurl.Query()
+		q.Set("includeProgress", "Y")
+		apiurl.RawQuery = q.Encode()
+	}
 
 	resp, err := c.makeRequest("GET", apiurl.String(), nil)
 	if err != nil {

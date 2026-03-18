@@ -25,7 +25,7 @@ func TestGetJob(t *testing.T) {
 
 	// Get the CloudBolt Job object
 	// Expect no errors to occur
-	job, err := client.GetJob(jobPath)
+	job, err := client.GetJob(jobPath, false)
 	Expect(job).NotTo(BeNil())
 	Expect(err).NotTo(HaveOccurred())
 
